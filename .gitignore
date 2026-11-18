@@ -1,0 +1,28 @@
+node_modules
+dist
+dev-dist
+*.local
+.DS_Store
+
+# Copied from node_modules by scripts/copy-assets.mjs (npm postinstall)
+public/tesseract
+public/pdfjs
+public/samples
+
+# Test output
+test-results
+playwright-report
+blob-report
+coverage
+
+# Side-by-side template images and Lighthouse reports
+reports
+
+# Word lock files
+~$*
+
+# Real client documents: never commit (customer names, GST and PAN numbers)
+samples/sample Result/
+
+# Hand-over copy of the company templates (the app uses src/templates/)
+samples/templates/

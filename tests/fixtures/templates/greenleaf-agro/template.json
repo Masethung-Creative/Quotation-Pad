@@ -1,0 +1,46 @@
+{
+  "id": "greenleaf-agro",
+  "display_name": "Greenleaf Agro Products",
+  "file_prefix": "Greenleaf",
+  "page_size": "A4",
+  "company": {
+    "name": "GREENLEAF AGRO PRODUCTS",
+    "address": "5/118, Salem Main Road, Namakkal - 637001",
+    "gstin": "33BBBBB1111B1Z6",
+    "phone": "04286 220000",
+    "email": "",
+    "website": ""
+  },
+  "colours": {
+    "primary": "#14532d",
+    "leaf": "#3f6212"
+  },
+  "fonts": { "body": "NotoSans", "size_pt": 10, "custom": [] },
+  "first_page": {
+    "header": [
+      { "type": "rect", "x": 0, "y": 0, "w": 210, "h": 4.403, "fill": "primary" },
+      { "type": "image", "src": "logo.svg", "x": 11.853, "y": 9.821, "w": 13.547, "h": 22.352 },
+      { "type": "text", "x": 32.173, "y": 20.659, "text": "{{company.name}}", "size": 25.92, "font": "LiberationSans", "bold": true, "colour": "primary" },
+      { "type": "text", "x": 32.512, "y": 27.771, "text": "Seeds - Fertilisers - Farm Equipment", "size": 11.52, "font": "LiberationSans", "colour": "leaf" },
+      { "type": "rect", "x": 11.853, "y": 36.237, "w": 186.267, "h": 0.677, "fill": "primary" }
+    ],
+    "footer": [
+      { "type": "rect", "x": 0, "y": 280.755, "w": 210, "h": 0.677, "fill": "primary" },
+      { "type": "text", "x": 11.853, "y": 288.205, "text": "{{company.address}}  |  Ph: {{company.phone}}  |  GSTIN {{company.gstin}}", "size": 10.56, "font": "LiberationSans", "colour": "primary" },
+      { "type": "rect", "x": 0, "y": 293.285, "w": 210, "h": 3.725, "fill": "primary" }
+    ],
+    "safe_area_mm": { "top": 42, "right": 15, "bottom": 22, "left": 15 }
+  },
+  "continuation": null,
+  "background": null,
+  "signature": {
+    "for_line": "For Greenleaf Agro Products",
+    "name": "",
+    "designation": "Authorised Signatory",
+    "align": "right",
+    "box_mm": { "w": 40, "h": 15 }
+  },
+  "original": {
+    "first": { "file": "original_letterpad.png", "page": 1 }
+  }
+}

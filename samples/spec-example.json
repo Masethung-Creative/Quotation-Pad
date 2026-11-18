@@ -1,0 +1,105 @@
+{
+  "blocks": [
+    {
+      "type": "heading",
+      "text": "QUOTATION",
+      "level": 1,
+      "align": "center"
+    },
+    {
+      "type": "meta",
+      "items": [
+        {
+          "label": "Ref No",
+          "value": "Q/2026-27/045"
+        },
+        {
+          "label": "Date",
+          "value": "17-11-2026"
+        }
+      ]
+    },
+    {
+      "type": "paragraph",
+      "runs": [
+        {
+          "text": "To,",
+          "bold": false,
+          "italic": false,
+          "underline": false
+        }
+      ],
+      "align": "left"
+    },
+    {
+      "type": "table",
+      "columns": [
+        "S.No",
+        "Description",
+        "Qty",
+        "Rate (Rs)",
+        "Amount (Rs)"
+      ],
+      "col_align": [
+        "center",
+        "left",
+        "right",
+        "right",
+        "right"
+      ],
+      "rows": [
+        [
+          "1",
+          "Item description",
+          "2",
+          "1,500.00",
+          "3,000.00"
+        ]
+      ]
+    },
+    {
+      "type": "totals",
+      "items": [
+        {
+          "label": "Sub Total",
+          "value": "3,000.00"
+        },
+        {
+          "label": "CGST 9%",
+          "value": "270.00"
+        },
+        {
+          "label": "SGST 9%",
+          "value": "270.00"
+        },
+        {
+          "label": "Grand Total",
+          "value": "3,540.00",
+          "bold": true
+        }
+      ],
+      "amount_in_words": "Rupees Three Thousand Five Hundred Forty Only"
+    },
+    {
+      "type": "list",
+      "ordered": true,
+      "items": [
+        "Validity: 30 days",
+        "Payment: 50% advance"
+      ]
+    },
+    {
+      "type": "signature",
+      "lines": [
+        "For <Company Name>",
+        "",
+        "Authorised Signatory"
+      ]
+    },
+    {
+      "type": "spacer",
+      "mm": 5
+    }
+  ],
+  "confidence": {}
+}

@@ -1,0 +1,5 @@
+# Cloudflare Pages project (free plan). Used by `npx wrangler pages deploy` and kept in sync
+# with the dashboard settings: build command `npm run build`, output directory `dist`.
+name = "quotationpad"
+pages_build_output_dir = "dist"
+compatibility_date = "2026-11-01"

@@ -1,0 +1,57 @@
+{
+  "id": "kaveri-trading",
+  "display_name": "Kaveri Trading Company",
+  "file_prefix": "Kaveri",
+  "page_size": "A4",
+  "company": {
+    "name": "KAVERI TRADING COMPANY",
+    "address": "27, Brough Road, Erode - 638001, Tamil Nadu",
+    "gstin": "33AAAAA0000A1Z5",
+    "phone": "+91 98765 00000",
+    "email": "sales@kaveritrading.example",
+    "website": ""
+  },
+  "colours": {
+    "primary": "#1c3b6b",
+    "accent": "#d99e26",
+    "stripe": "#e6edf7",
+    "light": "#dbe6f5"
+  },
+  "fonts": { "body": "NotoSans", "size_pt": 10, "custom": [] },
+  "first_page": {
+    "header": [
+      { "type": "rect", "x": 0, "y": 0, "w": 210, "h": 32.456, "fill": "primary" },
+      { "type": "rect", "x": 0, "y": 32.456, "w": 210, "h": 1.764, "fill": "accent" },
+      { "type": "image", "src": "logo.svg", "x": 12.7, "y": 7.056, "w": 18.344, "h": 18.344 },
+      { "type": "text", "x": 36.689, "y": 15.522, "text": "{{company.name}}", "size": 21, "font": "LiberationSans", "bold": true, "colour": "#ffffff" },
+      { "type": "text", "x": 36.689, "y": 22.578, "text": "Electrical & Industrial Supplies  |  GSTIN {{company.gstin}}", "size": 9.5, "font": "LiberationSans", "colour": "light" },
+      { "type": "rect", "x": 0, "y": 34.219, "w": 3.175, "h": 246.2, "fill": "stripe" }
+    ],
+    "footer": [
+      { "type": "rect", "x": 0, "y": 281.478, "w": 210, "h": 15.522, "fill": "primary" },
+      { "type": "rect", "x": 0, "y": 280.42, "w": 210, "h": 1.058, "fill": "accent" },
+      { "type": "text", "x": 16.933, "y": 291.003, "text": "{{company.address}}   |   {{company.phone}}   |   {{company.email}}", "size": 8.5, "font": "LiberationSans", "colour": "#ffffff" }
+    ],
+    "safe_area_mm": { "top": 40, "right": 15, "bottom": 24, "left": 18 }
+  },
+  "continuation": {
+    "header": [
+      { "type": "rect", "x": 0, "y": 0, "w": 210, "h": 11.994, "fill": "primary" },
+      { "type": "text", "x": 14.111, "y": 8.114, "text": "{{company.name}}", "size": 11, "font": "LiberationSans", "bold": true, "colour": "#ffffff" }
+    ],
+    "footer": [{ "type": "rect", "x": 0, "y": 291.356, "w": 210, "h": 5.644, "fill": "primary" }],
+    "safe_area_mm": { "top": 20, "right": 15, "bottom": 13, "left": 18 }
+  },
+  "background": null,
+  "signature": {
+    "for_line": "For Kaveri Trading Company",
+    "name": "R. Senthil Kumar",
+    "designation": "Proprietor",
+    "align": "right",
+    "box_mm": { "w": 40, "h": 15 }
+  },
+  "original": {
+    "first": { "file": "original_letterpad.pdf", "page": 1 },
+    "continuation": { "file": "original_letterpad.pdf", "page": 2 }
+  }
+}

@@ -1,0 +1,34 @@
+{
+  "id": "rm-smart-service-tech",
+  "name": "RM Smart Service Tech",
+  "page": {
+    "size": "A4",
+    "width_mm": 210,
+    "height_mm": 297
+  },
+  "docxBodyMarker": "{@body}",
+  "files": {
+    "pdf": "letterpad.pdf",
+    "docx": "letterpad.docx",
+    "thumbnail": "thumbnail.png"
+  },
+  "safeArea_mm": {
+    "top": 48,
+    "bottom": 21,
+    "left": 20,
+    "right": 20
+  },
+  "company": {
+    "legalName": "RM SMART SERVICE TECH",
+    "address": "No.860/3 New Street, Solatharam, Srimushnam Taluk, Cuddalore District, Tamil Nadu - 608701",
+    "phones": [
+      "9003820867"
+    ],
+    "email": "rmsmartservicetech@gmail.com"
+  },
+  "signature": {
+    "forLine": "For RM SMART SERVICE TECH",
+    "name": "",
+    "designation": "Authorised Signatory"
+  }
+}

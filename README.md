@@ -12,14 +12,76 @@ Phase 1 (this repository) is the MVP: built-in company templates, Word/PDF/scan/
 
 ---
 
-## Run it on your computer
+## How to use this repository (step by step)
 
-Needs Node.js 22 or newer (tested with 24) and npm.
+### Step 1: install the tools (once per computer)
+
+| Tool | Where | Check it works |
+| --- | --- | --- |
+| **Node.js 22 or newer** (LTS) | https://nodejs.org (Windows installer, keep the defaults) | `node -v` shows `v22...` or higher |
+| **Git** | https://git-scm.com/download/win (keep the defaults) | `git --version` |
+| **VS Code** (optional, recommended) | https://code.visualstudio.com | |
+
+Open a terminal (in VS Code: **Terminal > New Terminal**) for the commands below.
+
+### Step 2: get the code
 
 ```bash
-npm install          # also copies the OCR engine, OCR languages and pdf.js files into public/
-npm run dev          # http://localhost:5173
+git clone https://github.com/Masethung-Creative/Quotation-Pad.git
+cd Quotation-Pad
+npm install
 ```
+
+`npm install` downloads the libraries (a few minutes the first time) and copies the text reader (OCR), its Tamil/Hindi/English language files and the PDF reader into `public/`. Those copies are not stored in Git; `npm install` recreates them.
+
+### Step 3: run the app on your computer
+
+```bash
+npm run dev
+```
+
+Open **http://localhost:5173** in Chrome. Changes you save in `src/` show up immediately. Stop it with `Ctrl + C`.
+
+To try the real production version (as it will run online, with offline support):
+
+```bash
+npm run build
+npm run preview      # http://localhost:4391
+```
+
+### Step 4: use the app
+
+1. **Upload**: tap **Choose a file** (or **Take a photo** on a phone) and pick a quotation: Word `.docx`, PDF, scanned PDF, or a photo (JPG, PNG, HEIC). Old `.doc` files: save them as `.docx` first.
+2. **Reading**: the app reads it on your device. Nothing is uploaded anywhere.
+3. **Choose template**: tap the company the quotation should go out under (Mass Service Tech or RM Smart Service Tech). Each card shows your quotation on that letterhead.
+4. **Review & sign**: check the text, tables and totals. Amber marks show what needs a look (a wrong total, amount in words that does not match, a word the scanner was unsure of). The app never changes your numbers by itself. Optionally switch on **Add signature** (draw it, or photograph it on white paper).
+5. **Done**: **Download PDF** or **Share** (WhatsApp, Gmail ...). File name: `<Company>_<Customer>_<DD-MM-YYYY>.pdf`.
+
+Try it with the files in `samples/`.
+
+### Step 5: save your changes to GitHub
+
+```bash
+npm test                     # make sure nothing broke
+git add -A
+git commit -m "Describe what you changed"
+git push
+```
+
+If the site is connected to Cloudflare Pages (below), every `git push` publishes the new version automatically within about a minute. Phones that have the app installed switch to the new version the next time it is opened.
+
+### Step 6: add or change a company letterhead
+
+Copy `src/templates/mass-service-tech/` to `src/templates/<new-company-id>/`, replace `letterpad.pdf` / `letterpad.docx` / `thumbnail.png`, and edit `template.json` (name, address, phones, e-mail, signatory name, safe area in mm). Then run `npm test` and `npm run templates:check`, and push. Details: [`src/templates/README.md`](src/templates/README.md).
+
+### What is (and is not) in Git
+
+- Not in Git: `node_modules/`, `dist/` (build output), test reports, the OCR/PDF engine copies in `public/` (all recreated by `npm install` / `npm run build`).
+- Never commit real customer documents. `samples/sample Result/` is ignored for that reason; keep test files with real client names, GST or PAN numbers there or outside the project.
+
+---
+
+## All commands
 
 | Command | What it does |
 | --- | --- |
@@ -40,18 +102,20 @@ npm run dev          # http://localhost:5173
 
 ### 1. GitHub
 
-Create a **private** repository named `quotation-pad` and push this folder to it.
+The code lives at **https://github.com/Masethung-Creative/Quotation-Pad** (branch `main`). The repository is public at the moment; to make it private: GitHub > the repository > **Settings** > **General** > **Danger Zone** > **Change visibility** > **Private**. Cloudflare Pages works the same with a private repository.
+
+Setting up a fresh copy elsewhere:
 
 ```bash
-git init && git add -A && git commit -m "Quotation Pad, phase 1"
+git init && git add -A && git commit -m "Quotation Pad"
 git branch -M main
-git remote add origin https://github.com/<you>/quotation-pad.git
+git remote add origin https://github.com/<account>/<repository>.git
 git push -u origin main
 ```
 
 ### 2. Cloudflare Pages (free plan)
 
-1. Cloudflare dashboard > **Workers & Pages** > **Create** > **Pages** > **Connect to Git** > choose `quotation-pad`.
+1. Cloudflare dashboard > **Workers & Pages** > **Create** > **Pages** > **Connect to Git** > choose `Quotation-Pad`.
 2. Project name: **`quotationpad`** (gives **https://quotationpad.pages.dev**; if the name is taken, use `quotation-pad` -> quotation-pad.pages.dev).
 3. Framework preset: *None*. Build command: **`npm run build`**. Build output directory: **`dist`**.
 4. Node version comes from `.node-version` (22). Nothing else to set: no environment variables, no secrets, no functions.
@@ -127,6 +191,8 @@ Everything runs in the browser; heavy work runs in web workers so the screen nev
 | Ingest: type by magic bytes, 20 MB limit, HEIC -> JPEG, `.doc` message | `src/ingest/` |
 | Word: mammoth.js (worker) -> HTML -> blocks | `src/extract/docx.ts`, `src/workers/` |
 | Digital PDF: pdf.js text items with positions -> lines -> paragraphs, tables, lists, totals | `src/extract/pdf.ts`, `src/extract/reconstruct.ts` |
+| Boxed layouts (Excel / Tally / PDF-to-Word exports): the lines drawn in the PDF become cells, so side-by-side boxes stay side by side and boxed tables stay tables; Word layout tables with merged cells and tables typed with tabs are rebuilt the same way | `src/extract/rules.ts`, `src/extract/reconstruct.ts`, `src/extract/docx.ts` |
+| Quotations read by an older version are read again when opened (if never edited) | `refreshIfOutdated` in `src/pipeline/convert.ts` |
 | Scans / photos: canvas at 300 dpi -> grayscale, lighting, contrast, deskew, rule removal (worker) -> Tesseract.js (eng, tam, hin; lazy) | `src/extract/image.ts`, `src/extract/ocr.ts` |
 | Sender's own header/footer and page numbers removed; table split across pages re-joined | `src/extract/headerFooter.ts`, `src/extract/refine.ts` |
 | Canonical JSON (the one format every input becomes) | `src/schema/canonical.ts` |
@@ -167,5 +233,3 @@ Everything shipped is MIT, Apache-2.0, BSD or ISC (`npm run licenses`). Fonts: N
 ## Samples
 
 `samples/` holds one Word quotation (15-row table, Tamil + Hindi lines), one 2-page digital PDF (with its own header/footer and one deliberately wrong amount), one scanned PDF, one phone photo, a photo of a signature, and the canonical JSON example. All data is fictional.
-#   Q u o t a t i o n - P a d  
- 
