@@ -26,3 +26,5 @@ samples/sample Result/
 
 # Hand-over copy of the company templates (the app uses src/templates/)
 samples/templates/
+
+.vercel

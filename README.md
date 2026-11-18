@@ -145,6 +145,8 @@ To add or remove a person: edit the email list in the Access policy. No redeploy
 
 ### Vercel instead?
 
+**Live now on Vercel: https://quotation-pad.vercel.app** (project `quotation-pad`, connected to this GitHub repository: every push to `main` deploys automatically). `.vercelignore` keeps client documents and build leftovers out of the upload. Manual deploy from this folder: `npx vercel deploy --prod`.
+
 The app is plain static files, so it also runs on Vercel. `vercel.json` sets the same security headers and routing as `public/_headers` (a unit test keeps the two identical). In Vercel: **Add New > Project** > import the GitHub repo. It reads `vercel.json` (build `npm run build`, output `dist`), with nothing else to configure.
 
 Before choosing Vercel, two points against the brief:
