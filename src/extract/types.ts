@@ -46,6 +46,7 @@ export interface ExtractResult {
   removed: string[];
   warnings: string[];
   method: ExtractMethod;
+  /** Pages of the original (0 = not known, e.g. a Word file that does not record it). */
   pages: number;
 }
 

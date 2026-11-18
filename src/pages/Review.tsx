@@ -9,7 +9,7 @@ import { Card } from '@/components/ui/card';
 import { Progress } from '@/components/ui/badge';
 import { Segmented } from '@/components/ui/misc';
 import { Menu, MenuContent, MenuItem, MenuSeparator, MenuTrigger, Sheet, SheetContent } from '@/components/ui/sheet';
-import { db, getSettings, signaturePosition, type Conversion, type SignChoice } from '@/db/db';
+import { db, getSettings, signaturePosition, storable, type Conversion, type SignChoice } from '@/db/db';
 import type { ExtractProgress } from '@/extract/types';
 import { friendlyError } from '@/lib/errors';
 import { useNavigate, useParams } from '@/lib/router';
@@ -144,14 +144,14 @@ export default function Review() {
   // Re-render the preview 1 s after the last edit; at once when the template changes.
   useEffect(() => {
     if (!templateId || !conv) return;
-    const key = renderKey(doc, templateId);
+    const key = renderKey(doc, templateId, conv.pages);
     if (render?.key === key) return;
     let cancelled = false;
     const immediate = renderedTemplate.current !== templateId;
     const timer = setTimeout(
       async () => {
         try {
-          const result = await renderForTemplate(doc, templateId, conv.name);
+          const result = await renderForTemplate(doc, templateId, conv.name, conv.pages);
           if (cancelled) return;
           renderedTemplate.current = templateId;
           setRender({ key, result });
@@ -253,7 +253,7 @@ export default function Review() {
     setFinishing(true);
     save.flush();
     try {
-      const rendered = await renderForTemplate(doc, templateId, conv.name);
+      const rendered = await renderForTemplate(doc, templateId, conv.name, conv.pages);
       const pdf = await finalPdf(rendered, templateId, sign.on ? selectedSignature : null, conv.name);
       let warnings = conv.warnings.filter((w) => !w.startsWith('PDF check:'));
       try {
@@ -264,7 +264,7 @@ export default function Review() {
       }
       await db.conversions.update(conv.id, {
         edited_json: doc,
-        output_pdf: new Blob([pdf as BlobPart], { type: 'application/pdf' }),
+        output_pdf: await storable(new Blob([pdf as BlobPart], { type: 'application/pdf' })),
         output_pages: rendered.pages,
         output_name: outputFileName(def, doc, conv.created_at),
         status: 'rendered',
@@ -439,7 +439,7 @@ export default function Review() {
             <p className="text-sm">Placing the quotation on {def.display_name}</p>
           </div>
         )}
-        {render && render.key !== renderKey(doc, def.id) ? (
+        {render && render.key !== renderKey(doc, def.id, conv.pages) ? (
           <span className="absolute right-2 top-2 flex items-center gap-1.5 rounded-full bg-card/95 px-2.5 py-1 text-xs text-muted-foreground shadow" aria-live="polite">
             <Spinner className="size-3.5" /> Updating
           </span>

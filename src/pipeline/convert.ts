@@ -1,5 +1,5 @@
 import { splitPairs } from '@/render/body';
-import { blobBytes, db, signaturePosition, type Conversion, type SavedSignature } from '@/db/db';
+import { blobBytes, db, signaturePosition, storable, type Conversion, type SavedSignature } from '@/db/db';
 import type { ExtractOptions } from '@/extract';
 import type { ExtractResult } from '@/extract/types';
 import { detectFile, type FileKind } from '@/ingest/detect';
@@ -41,9 +41,9 @@ export async function runExtraction(file: Blob, kind: FileKind, options: Extract
 /**
  * Bump when the reader gets better at a kind of file, so quotations read by an older
  * version are read again (2: ruled boxes in PDFs, layout tables and tab tables in Word;
- * 3: the document type becomes the title).
+ * 3: the document type becomes the title; 4: Word files record their real page count).
  */
-export const EXTRACTOR_VERSION = 3;
+export const EXTRACTOR_VERSION = 4;
 
 /** Kinds of file the latest reader improved; scans are not re-read (OCR is slow). */
 const IMPROVED: ExtractResult['method'][] = ['pdf-text', 'pdf-mixed', 'docx'];
@@ -64,6 +64,25 @@ export async function refreshIfOutdated(conversion: Conversion, options: Extract
   return (await db.conversions.get(conversion.id)) ?? conversion;
 }
 
+/** Saving normally takes milliseconds; some phone browsers' storage can stall instead of failing. */
+const SAVE_TIMEOUT_MS = 20_000;
+
+function withTimeout<T>(promise: Promise<T>, ms: number): Promise<T> {
+  return new Promise<T>((resolve, reject) => {
+    const timer = setTimeout(() => reject(new Error('Saving on this device took too long')), ms);
+    promise.then(
+      (value) => {
+        clearTimeout(timer);
+        resolve(value);
+      },
+      (err: unknown) => {
+        clearTimeout(timer);
+        reject(err instanceof Error ? err : new Error(String(err)));
+      },
+    );
+  });
+}
+
 /** Ingest + extract a new upload and store it as a conversion. Returns the conversion id. */
 export async function createConversion(file: File, options: ExtractOptions): Promise<string> {
   const kind = await detectFile(file);
@@ -72,7 +91,7 @@ export async function createConversion(file: File, options: ExtractOptions): Pro
   const record: Conversion = {
     id,
     name: file.name || 'Quotation',
-    original_file: file,
+    original_file: await storable(file),
     original_type: kind,
     extracted_json: result.doc,
     edited_json: null,
@@ -92,7 +111,14 @@ export async function createConversion(file: File, options: ExtractOptions): Pro
     error: null,
     extractor: EXTRACTOR_VERSION,
   };
-  await db.conversions.add(record);
+  try {
+    await withTimeout(db.conversions.add(record), SAVE_TIMEOUT_MS);
+  } catch {
+    // Phone storage full, blocked or stuck: keep the quotation, but without its original
+    // file (only needed for "read again"), which is by far the biggest part of the record.
+    // If even that does not finish, the upload screen shows "Try again" instead of hanging.
+    await withTimeout(db.conversions.put({ ...record, original_file: null }), SAVE_TIMEOUT_MS);
+  }
   return id;
 }
 
@@ -137,17 +163,21 @@ function hash(text: string): string {
 const cache = new Map<string, Promise<RenderResult>>();
 const CACHE_LIMIT = 8;
 
-export function renderKey(doc: CanonicalDoc, templateId: string): string {
-  return `${templateId}|${hash(JSON.stringify(doc.blocks))}`;
+export function renderKey(doc: CanonicalDoc, templateId: string, fitPages = 0): string {
+  return `${templateId}|${fitPages}|${hash(JSON.stringify(doc.blocks))}`;
 }
 
-export function renderForTemplate(doc: CanonicalDoc, templateId: string, title?: string): Promise<RenderResult> {
-  const key = renderKey(doc, templateId);
+/**
+ * @param fitPages pages of the original quotation; the layout is tightened (within limits)
+ *   so a one-page quotation stays one page on the letterhead.
+ */
+export function renderForTemplate(doc: CanonicalDoc, templateId: string, title?: string, fitPages = 0): Promise<RenderResult> {
+  const key = renderKey(doc, templateId, fitPages);
   let hit = cache.get(key);
   if (!hit) {
     hit = (async () => {
       const [{ renderOnTemplate }, template] = await Promise.all([import('@/render'), loadTemplateBundle(templateId)]);
-      return renderOnTemplate({ doc, template, title });
+      return renderOnTemplate({ doc, template, title, fitPages });
     })();
     hit.catch(() => cache.delete(key));
     cache.set(key, hit);

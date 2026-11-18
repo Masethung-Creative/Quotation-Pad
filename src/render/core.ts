@@ -1,5 +1,5 @@
 import type { CanonicalDoc } from '@/schema/canonical';
-import { buildDocDefinition, PAGE_PT, type BuiltDocument, type SignatureSlot, type TemplateInput } from './docdef';
+import { buildDocDefinition, DENSITIES, PAGE_PT, type BuiltDocument, type SignatureSlot, type TemplateInput } from './docdef';
 import { fitImage, signatureBox, type SignatureOffset } from './signature';
 import { countPages, stampImage, stampOnBackground } from './stamp';
 
@@ -13,11 +13,15 @@ export interface RenderRequest {
   doc: CanonicalDoc;
   template: TemplateInput;
   title?: string;
+  /** Pages of the original quotation: the layout is tightened (within limits) to fit them. */
+  fitPages?: number;
 }
 
 export interface RenderResult {
   pdf: Uint8Array;
   pages: number;
+  /** Layout density used (index into DENSITIES; 0 = normal). */
+  density?: number;
   /** Where the template's signature box landed (null when the document has no signature block). */
   slot: SignatureSlot | null;
 }
@@ -75,9 +79,23 @@ function loadPdfMake(): Promise<PdfMakeLike> {
 }
 
 export async function renderPdf(req: RenderRequest, loadFont: FontLoader = fetchFont): Promise<RenderResult> {
-  const built = buildDocDefinition(req.doc, req.template, { title: req.title });
-  const { pdf, pages } = await produce(built, req.template, loadFont, req.title);
-  return { pdf, pages, slot: built.slot.value };
+  const once = async (density: number) => {
+    const built = buildDocDefinition(req.doc, req.template, { title: req.title, density });
+    const { pdf, pages } = await produce(built, req.template, loadFont, req.title);
+    return { pdf, pages, slot: built.slot.value, density };
+  };
+  let best = await once(0);
+  // A one-page quotation should stay one page: set it tighter until it fits the original.
+  // Original page count unknown: only less spacing (same text size), and only when that
+  // saves a page, e.g. the signature alone on an almost empty last page.
+  const target = req.fitPages && req.fitPages > 0 ? req.fitPages : Math.max(1, best.pages - 1);
+  const lastLevel = req.fitPages && req.fitPages > 0 ? DENSITIES.length - 1 : 1;
+  for (let level = 1; best.pages > target && level <= lastLevel; level++) {
+    const next = await once(level);
+    if (next.pages < best.pages) best = next;
+    if (next.pages <= target) break;
+  }
+  return best;
 }
 
 /**

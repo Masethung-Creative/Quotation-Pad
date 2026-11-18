@@ -1,7 +1,7 @@
 import 'fake-indexeddb/auto';
 import Dexie from 'dexie';
 import { beforeEach, describe, expect, it } from 'vitest';
-import { db, getSettings, lastTemplate, purgeOldOriginals, saveSetting, signaturePosition, type Conversion } from '@/db/db';
+import { db, getSettings, lastTemplate, purgeOldOriginals, reviveBlobs, saveSetting, signaturePosition, storable, type Conversion } from '@/db/db';
 
 const DAY = 24 * 60 * 60 * 1000;
 
@@ -97,5 +97,48 @@ describe('upgrade from the first database version', () => {
     expect(c.template_id).toBeNull();
     expect(c.sign).toEqual({ on: false, signature_id: null });
     upgraded.close();
+  });
+});
+
+describe('files on iPhones and iPads', () => {
+  // Safari / WebKit reject Blob and File values in IndexedDB ("Error preparing Blob/File
+  // data to be stored in object store"), so the app stores plain bytes instead.
+  it('stores files as plain bytes and reads them back as Blobs', async () => {
+    const now = Date.now();
+    const file = new File(['%PDF-1.7 original'], 'q.pdf', { type: 'application/pdf' });
+    await db.conversions.add({ ...conversion('blob1', 0, now), original_file: await storable(file), output_pdf: await storable(new Blob(['out'], { type: 'application/pdf' })) });
+
+    // What is really in IndexedDB: no Blob anywhere.
+    const raw = new Dexie('quotation-pad');
+    await raw.open();
+    const stored = (await raw.table('conversions').get('blob1')) as Record<string, unknown>;
+    raw.close();
+    expect(stored.original_file).not.toBeInstanceOf(Blob);
+    expect(stored.output_pdf).not.toBeInstanceOf(Blob);
+
+    // What the app sees: Blobs with the same bytes and type.
+    const c = (await db.conversions.get('blob1'))!;
+    expect(c.original_file).toBeInstanceOf(Blob);
+    expect(c.original_file!.type).toBe('application/pdf');
+    expect(await c.original_file!.text()).toBe('%PDF-1.7 original');
+    expect(await c.output_pdf!.text()).toBe('out');
+    // Also through queries, not only get().
+    const [listed] = await db.conversions.where('id').equals('blob1').toArray();
+    expect(await listed.original_file!.text()).toBe('%PDF-1.7 original');
+  });
+
+  it('leaves Blobs saved before this change as they are', () => {
+    const old = new Blob(['original']);
+    const record = { id: 'old', original_file: old, output_pdf: null };
+    expect(reviveBlobs(record).original_file).toBe(old);
+    expect(reviveBlobs(record).output_pdf).toBeNull();
+  });
+
+  it('stores signatures as bytes too', async () => {
+    await db.signatures.add({ id: 's1', label: 'Me', png: await storable(new Blob([new Uint8Array([137, 80, 78, 71])], { type: 'image/png' })), width: 10, height: 5, ink: 'blue', source: 'drawn', created_at: 1 });
+    const s = (await db.signatures.get('s1'))!;
+    expect(s.png).toBeInstanceOf(Blob);
+    expect(s.png.type).toBe('image/png');
+    expect([...new Uint8Array(await s.png.arrayBuffer())]).toEqual([137, 80, 78, 71]);
   });
 });

@@ -170,10 +170,10 @@ export async function extractFile(blob: Blob, kind: FileKind, options: ExtractOp
     }
     case 'docx': {
       progress({ stage: 'reading', message: 'Reading the Word file' });
-      const [{ docxToHtmlOffThread }, { finishDocx }] = await Promise.all([import('@/workers/extractClient'), import('./docx')]);
-      const html = await docxToHtmlOffThread(await blob.arrayBuffer());
+      const [{ docxToHtmlOffThread }, { finishDocx, docxPageCount }] = await Promise.all([import('@/workers/extractClient'), import('./docx')]);
+      const [html, pages] = await Promise.all([docxToHtmlOffThread(await blob.arrayBuffer()), blob.arrayBuffer().then(docxPageCount)]);
       progress({ stage: 'structure', message: 'Rebuilding tables and paragraphs' });
-      return finishDocx(html);
+      return finishDocx(html, pages ?? 0);
     }
     case 'pdf':
       return extractPdf(await blob.arrayBuffer(), options, progress);

@@ -97,6 +97,8 @@ class QuotationPadDB extends Dexie {
             c.output_name ??= null;
           }),
       );
+    // Files are stored as bytes (see storable); hand them back as Blobs.
+    for (const name of ['conversions', 'signatures']) this.table(name).hook('reading', (obj) => reviveBlobs(obj));
   }
 }
 
@@ -190,4 +192,48 @@ export async function storageEstimate(): Promise<{ usage: number; quota: number 
 
 export async function blobBytes(blob: Blob): Promise<Uint8Array> {
   return new Uint8Array(await blob.arrayBuffer());
+}
+
+// ---------------------------------------------------------------------------------------
+// Files in IndexedDB
+// ---------------------------------------------------------------------------------------
+
+/**
+ * Safari / WebKit (every browser on an iPhone or iPad, and some Android web views) refuse
+ * to store Blob and File objects in IndexedDB ("Error preparing Blob/File data to be
+ * stored in object store"), and on some phones the save just never finishes. So files are
+ * stored as plain bytes, and turned back into Blobs whenever a record is read.
+ */
+interface StoredBlob {
+  __qpBlob: 1;
+  type: string;
+  bytes: ArrayBuffer;
+}
+
+const BLOB_FIELDS = ['original_file', 'output_pdf', 'output_docx', 'png'] as const;
+
+function isStoredBlob(v: unknown): v is StoredBlob {
+  // toString instead of instanceof: the bytes may come from another realm (worker, frame).
+  return typeof v === 'object' && v !== null && (v as StoredBlob).__qpBlob === 1 && Object.prototype.toString.call((v as StoredBlob).bytes) === '[object ArrayBuffer]';
+}
+
+/** Turns stored bytes back into Blobs (records saved before this change still hold Blobs). */
+export function reviveBlobs<T>(record: T): T {
+  if (!record || typeof record !== 'object') return record;
+  const r = record as Record<string, unknown>;
+  for (const key of BLOB_FIELDS) {
+    const v = r[key];
+    if (isStoredBlob(v)) r[key] = new Blob([v.bytes], { type: v.type });
+  }
+  return record;
+}
+
+/**
+ * Use for every Blob written to the database: `original_file: await storable(file)`.
+ * Returns the bytes in storable form, typed as the Blob the record will hold once read.
+ */
+export async function storable<T extends Blob | null>(blob: T): Promise<T> {
+  if (!blob) return blob;
+  const stored: StoredBlob = { __qpBlob: 1, type: blob.type, bytes: await blob.arrayBuffer() };
+  return stored as unknown as T;
 }

@@ -7,7 +7,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label, Segmented } from '@/components/ui/misc';
 import { Sheet, SheetContent } from '@/components/ui/sheet';
-import { db, type SavedSignature } from '@/db/db';
+import { db, storable, type SavedSignature } from '@/db/db';
 import { friendlyError } from '@/lib/errors';
 import { uid } from '@/lib/utils';
 import { canvasToInk, inkToPng, photoToInk, type SignaturePng } from './image';
@@ -160,7 +160,7 @@ export function SignatureSheet({ open, onOpenChange, onSaved, existingCount }: P
         source: mode === 'draw' ? 'drawn' : 'photo',
         created_at: Date.now(),
       };
-      await db.signatures.add(record);
+      await db.signatures.add({ ...record, png: await storable(record.png) });
       toast.success('Signature saved on this device.');
       onSaved(record);
       onOpenChange(false);

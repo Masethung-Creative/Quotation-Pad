@@ -393,7 +393,53 @@ function tabTables(blocks: XBlock[]): XBlock[] {
   return out;
 }
 
-export function finishDocx(html: DocxHtml): ExtractResult {
+/**
+ * The page count Word saved in the file (docProps/app.xml, `<Pages>`), or null. Used to
+ * keep a one-page Word quotation on one page. Reads just that one entry of the zip.
+ */
+export async function docxPageCount(buffer: ArrayBuffer): Promise<number | null> {
+  try {
+    const bytes = new Uint8Array(buffer);
+    const view = new DataView(buffer);
+    let eocd = -1;
+    for (let i = bytes.length - 22; i >= Math.max(0, bytes.length - 65_557); i--) {
+      if (view.getUint32(i, true) === 0x06054b50) {
+        eocd = i;
+        break;
+      }
+    }
+    if (eocd < 0) return null;
+    const entries = view.getUint16(eocd + 10, true);
+    let p = view.getUint32(eocd + 16, true);
+    for (let n = 0; n < entries && p + 46 <= bytes.length; n++) {
+      if (view.getUint32(p, true) !== 0x02014b50) return null;
+      const method = view.getUint16(p + 10, true);
+      const size = view.getUint32(p + 20, true);
+      const nameLen = view.getUint16(p + 28, true);
+      const skip = nameLen + view.getUint16(p + 30, true) + view.getUint16(p + 32, true);
+      const local = view.getUint32(p + 42, true);
+      const name = new TextDecoder().decode(bytes.subarray(p + 46, p + 46 + nameLen));
+      p += 46 + skip;
+      if (name !== 'docProps/app.xml') continue;
+      const start = local + 30 + view.getUint16(local + 26, true) + view.getUint16(local + 28, true);
+      const raw = bytes.slice(start, start + size);
+      let xml: string;
+      if (method === 0) xml = new TextDecoder().decode(raw);
+      else if (method === 8 && typeof DecompressionStream !== 'undefined') {
+        const stream = new Blob([raw]).stream().pipeThrough(new DecompressionStream('deflate-raw'));
+        xml = await new Response(stream).text();
+      } else return null;
+      const m = /<Pages>\s*(\d+)\s*<\/Pages>/.exec(xml);
+      const pages = m ? Number(m[1]) : 0;
+      return pages > 0 && pages < 1000 ? pages : null;
+    }
+    return null;
+  } catch {
+    return null;
+  }
+}
+
+export function finishDocx(html: DocxHtml, pages = 0): ExtractResult {
   const { blocks, text, images } = htmlToBlocks(html.html);
   const warnings: string[] = [];
   if (images > 0) {
@@ -407,6 +453,6 @@ export function finishDocx(html: DocxHtml): ExtractResult {
     removed: repeated,
     warnings,
     method: 'docx',
-    pages: 1,
+    pages,
   };
 }

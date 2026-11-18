@@ -122,21 +122,43 @@ interface Ctx {
   tf: number;
   /** Width of the amount column shared by every table and the totals (text width). */
   amountW: number;
+  /** Spacing factor of the current density (1 = normal). */
+  sp: number;
+  padX: number;
+  padY: number;
+  /** Space after a block (pt). */
+  gap: number;
+  grid: ReturnType<typeof gridLayoutFor>;
 }
 
-const gridLayout = {
-  hLineWidth: () => BODY.line,
-  vLineWidth: () => BODY.line,
-  hLineColor: () => BODY.border,
-  vLineColor: () => BODY.border,
-  paddingLeft: () => BODY.padX,
-  paddingRight: () => BODY.padX,
-  paddingTop: () => BODY.padY,
-  paddingBottom: () => BODY.padY,
-};
+/**
+ * How tightly the body is set. Level 0 is the normal, airy layout. When the result runs to
+ * more pages than the original quotation, the renderer tries the next levels (less space
+ * first, then slightly smaller text, never below about 8 pt) until it fits.
+ */
+export const DENSITIES = [
+  { font: 1, space: 1, pad: 1 },
+  { font: 1, space: 0.6, pad: 0.75 },
+  { font: 0.94, space: 0.45, pad: 0.6 },
+  { font: 0.88, space: 0.3, pad: 0.45 },
+  { font: 0.82, space: 0.2, pad: 0.35 },
+] as const;
+
+function gridLayoutFor(padX: number, padY: number) {
+  return {
+    hLineWidth: () => BODY.line,
+    vLineWidth: () => BODY.line,
+    hLineColor: () => BODY.border,
+    vLineColor: () => BODY.border,
+    paddingLeft: () => padX,
+    paddingRight: () => padX,
+    paddingTop: () => padY,
+    paddingBottom: () => padY,
+  };
+}
 
 /** Room for cell text once padding and lines are taken off. */
-const innerWidth = (available: number, n: number) => available - n * 2 * BODY.padX - (n + 1) * BODY.line;
+const innerWidth = (available: number, n: number, padX: number = BODY.padX) => available - n * 2 * padX - (n + 1) * BODY.line;
 
 function tableContent(input: TableBlock, ctx: Ctx): Content {
   const table = normaliseTable(input);
@@ -163,17 +185,17 @@ function tableContent(input: TableBlock, ctx: Ctx): Content {
   const shared = amountColumn(table) >= 0 ? ctx.amountW * (size / ctx.tf) : 0;
   return {
     fontSize: size,
-    lineHeight: 1.15,
-    margin: [0, 0, 0, BODY.blockGap],
+    lineHeight: ctx.sp < 1 ? 1.1 : 1.15,
+    margin: [0, 0, 0, ctx.gap],
     table: {
       headerRows: hasHeader ? 1 : 0,
       // Never split a row across pages; never leave the header alone at a page bottom.
       dontBreakRows: true,
       keepWithHeaderRows: hasHeader ? 1 : 0,
-      widths: columnWidths(table, innerWidth(ctx.available, n), size, shared),
+      widths: columnWidths(table, innerWidth(ctx.available, n, ctx.padX), size, shared),
       body,
     },
-    layout: gridLayout,
+    layout: ctx.grid,
   };
 }
 
@@ -243,15 +265,15 @@ function partyBox(table: TableBlock, ctx: Ctx): Content {
     { stack: sideStack(left, leftIsCustomer), margin: [2, 2, 2, 2] },
     { stack: sideStack(right, false), margin: [2, 2, 2, 2] },
   ];
-  const inner = innerWidth(ctx.available, 2);
+  const inner = innerWidth(ctx.available, 2, ctx.padX);
   const given = table.col_width && table.col_width.length === 2 ? table.col_width : [1, 1];
   const share = Math.min(0.62, Math.max(0.38, given[0] / (given[0] + given[1] || 1)));
   return {
     fontSize: size,
-    lineHeight: 1.18,
-    margin: [0, 0, 0, BODY.blockGap],
+    lineHeight: ctx.sp < 1 ? 1.1 : 1.18,
+    margin: [0, 0, 0, ctx.gap],
     table: { dontBreakRows: true, widths: [inner * share, inner * (1 - share)], body: [cells] },
-    layout: gridLayout,
+    layout: ctx.grid,
   };
 }
 
@@ -276,7 +298,7 @@ function signatureContent(block: SignatureBlock, ctx: Ctx): Content {
   // The room for the signature: a blank line whose position pdfmake reports back (see SLOT_ID).
   const lineH = 2;
   stack.splice(slotAt, 0, { text: ' ', id: SLOT_ID, fontSize: lineH, lineHeight: 1, margin: [0, 2, 0, Math.max(0, boxH - lineH)] });
-  return { stack, alignment: pdfAlign(signatureAlign(block, ctx.def)), margin: [0, 14, 0, 0], unbreakable: true };
+  return { stack, alignment: pdfAlign(signatureAlign(block, ctx.def)), margin: [0, 14 * ctx.sp, 0, 0], unbreakable: true };
 }
 
 /** The template decides where its own signature block sits; a custom one keeps its place. */
@@ -294,7 +316,7 @@ function blockContent(block: Block, ctx: Ctx): Content | null {
         text: styled(block.text, { bold: true }, ctx.fonts, ctx.body),
         fontSize: f * scale,
         alignment: pdfAlign(block.align),
-        margin: [0, block.level === 1 ? 2 : 4, 0, block.level === 1 ? 8 : 4],
+        margin: [0, (block.level === 1 ? 2 : 4) * ctx.sp, 0, (block.level === 1 ? 8 : 4) * ctx.sp],
       };
     }
     case 'meta': {
@@ -309,14 +331,14 @@ function blockContent(block: Block, ctx: Ctx): Content | null {
         // Two details share a line: the first on the left, the second on the right (Ref No ... Date).
         rows.push(right ? { columns: [{ ...cell(left, 'left'), width: '*' }, { ...cell(right, 'right'), width: 'auto' }], columnGap: 12 } : cell(left, 'left'));
       }
-      return { stack: rows, margin: [0, 0, 0, 6] };
+      return { stack: rows, margin: [0, 0, 0, 6 * ctx.sp] };
     }
     case 'paragraph':
       return {
         text: block.runs.flatMap((r: Run) => styled(r.text, { bold: r.bold, italics: r.italic, underline: r.underline }, ctx.fonts, ctx.body)),
         alignment: pdfAlign(block.align),
         preserveLeadingSpaces: true,
-        margin: [0, 0, 0, 5],
+        margin: [0, 0, 0, 5 * ctx.sp],
       };
     case 'table':
       return tableContent(block, ctx);
@@ -342,31 +364,31 @@ function blockContent(block: Block, ctx: Ctx): Content | null {
         stack.push({
           fontSize: size,
           table: { dontBreakRows: true, widths: ['*', labelW, Math.max(ctx.amountW, totalsAmountWidth(block, size))], body },
-          layout: { ...gridLayout, vLineWidth: () => 0, paddingTop: () => 2, paddingBottom: () => 2 },
+          layout: { ...ctx.grid, vLineWidth: () => 0, paddingTop: () => Math.min(2, ctx.padY), paddingBottom: () => Math.min(2, ctx.padY) },
         });
       }
       const words = block.amount_in_words?.trim().replace(/^\(\s*/, '').replace(/\s*\)\s*$/, '');
       if (words) {
         stack.push({
           fontSize: size,
-          margin: [0, 6, 0, 0],
+          margin: [0, 6 * ctx.sp, 0, 0],
           table: {
             widths: ['*'],
             body: [[{ text: [{ text: 'Amount in words: ', color: BODY.muted, bold: true }, ...styled(words, { bold: true }, ctx.fonts, ctx.body)] }]],
           },
-          layout: gridLayout,
+          layout: ctx.grid,
         });
       }
-      return { stack, margin: [0, 0, 0, BODY.blockGap] };
+      return { stack, margin: [0, 0, 0, ctx.gap] };
     }
     case 'list': {
       const items = block.items.map((item) => ({ text: styled(item, {}, ctx.fonts, ctx.body) }));
-      return block.ordered ? { ol: items, margin: [0, 0, 0, 6] } : { ul: items, margin: [0, 0, 0, 6] };
+      return block.ordered ? { ol: items, margin: [0, 0, 0, 6 * ctx.sp] } : { ul: items, margin: [0, 0, 0, 6 * ctx.sp] };
     }
     case 'signature':
       return signatureContent(block, ctx);
     case 'spacer':
-      return { text: '', margin: [0, mm(Math.max(0, block.mm)), 0, 0] };
+      return { text: '', margin: [0, mm(Math.max(0, block.mm)) * ctx.sp, 0, 0] };
   }
 }
 
@@ -504,6 +526,8 @@ function ascenderOf(file: string, tpl: TemplateInput): number {
 
 export interface BuildOptions {
   title?: string;
+  /** Index into DENSITIES (0 = normal). */
+  density?: number;
 }
 
 export function buildDocDefinition(doc: CanonicalDoc, tpl: TemplateInput, options: BuildOptions = {}): BuiltDocument {
@@ -516,21 +540,40 @@ export function buildDocDefinition(doc: CanonicalDoc, tpl: TemplateInput, option
   const next = (def.continuation ?? def.first_page).safe_area_mm;
 
   // pageMargins = continuation safe area. Page 1 gets a spacer for its taller header.
+  const density = DENSITIES[Math.max(0, Math.min(DENSITIES.length - 1, options.density ?? 0))];
   const margins: [number, number, number, number] = [
     mm(Math.max(first.left, next.left)),
-    mm(next.top + BODY.topGapMm),
+    mm(next.top + BODY.topGapMm * density.space),
     mm(Math.max(first.right, next.right)),
     mm(Math.max(first.bottom, next.bottom)),
   ];
   const available = pageW - margins[0] - margins[2];
   const accent = resolveColour('primary', def, '#1d3a6b');
-  const tf = Math.min(def.fonts.size_pt, BODY.tableFont);
+  const f = def.fonts.size_pt * density.font;
+  const tf = Math.min(def.fonts.size_pt, BODY.tableFont) * density.font;
   // One width for the amount column of every table and the totals, so all amounts line up.
   const amountW = Math.max(
     0,
     ...doc.blocks.map((b) => (b.type === 'table' && !isPartyBox(normaliseTable(b)) ? amountWidth(normaliseTable(b), tf) : b.type === 'totals' ? totalsAmountWidth(b, tf) : 0)),
   );
-  const ctx: Ctx = { fonts, body: def.fonts.body, f: def.fonts.size_pt, available, def, accent, shade: tint(accent, 0.88), tf, amountW };
+  const padX = BODY.padX * Math.max(0.6, density.pad);
+  const padY = BODY.padY * density.pad;
+  const ctx: Ctx = {
+    fonts,
+    body: def.fonts.body,
+    f,
+    available,
+    def,
+    accent,
+    shade: tint(accent, 0.88),
+    tf,
+    amountW,
+    sp: density.space,
+    padX,
+    padY,
+    gap: BODY.blockGap * density.space,
+    grid: gridLayoutFor(padX, padY),
+  };
 
   const content: Content[] = [];
   const firstPageExtra = mm(Math.max(0, first.top - next.top));
@@ -538,8 +581,33 @@ export function buildDocDefinition(doc: CanonicalDoc, tpl: TemplateInput, option
 
   const own = ownLetterheadBlocks(doc.blocks, def);
   const blocks = doc.blocks.filter((_, i) => !own.has(i));
+
+  // Tight layouts: the terms (text just before the signature) and the signature side by
+  // side, as many printed quotations do, instead of the signature alone on a new page.
+  const sigAt = blocks.findIndex((b) => b.type === 'signature');
+  let tailFrom = -1;
+  if (density.space <= 0.45 && sigAt > 0) {
+    let k = sigAt - 1;
+    while (k >= 0 && blocks[k].type === 'spacer') k--;
+    let from = sigAt;
+    for (let n = 0; k >= 0 && n < 4 && (blocks[k].type === 'paragraph' || blocks[k].type === 'list' || blocks[k].type === 'spacer'); k--, n++) from = k;
+    if (from < sigAt && blocks.slice(from, sigAt).some((b) => b.type !== 'spacer')) tailFrom = from;
+  }
+
   for (let i = 0; i < blocks.length; i++) {
     const block = blocks[i];
+    if (i === tailFrom) {
+      const left = blocks
+        .slice(tailFrom, sigAt)
+        .filter((b) => b.type !== 'spacer')
+        .map((b) => blockContent(b, ctx))
+        .filter((c): c is Content => c !== null);
+      const sig = blockContent(blocks[sigAt], ctx) as Content & { margin?: number[] };
+      sig.margin = [0, 0, 0, 0];
+      content.push({ columns: [{ stack: left, width: '*' }, { stack: [sig], width: mm(def.signature.box_mm.w) + 60 }], columnGap: 12, unbreakable: true, margin: [0, 4 * ctx.sp, 0, 0] } as Content);
+      i = sigAt;
+      continue;
+    }
     // Keep totals + signature together on one page when the group is small enough.
     if (block.type === 'totals') {
       let end = -1;
@@ -564,6 +632,9 @@ export function buildDocDefinition(doc: CanonicalDoc, tpl: TemplateInput, option
     }
     const c = blockContent(block, ctx);
     if (!c) continue;
+    // Boxes that follow each other directly (one ruled form in the original: address |
+    // details, then the item table...) print as one joined frame, not separate boxes.
+    if (block.type === 'table' && blocks[i + 1]?.type === 'table') (c as { margin?: number[] }).margin = [0, 0, 0, 0];
     content.push(block.type === 'totals' ? { stack: [c], unbreakable: true } : c);
   }
 
@@ -586,7 +657,7 @@ export function buildDocDefinition(doc: CanonicalDoc, tpl: TemplateInput, option
     content,
     background: (page: number) => (page === 1 ? firstLayer : nextLayer),
     images,
-    defaultStyle: { font: def.fonts.body, fontSize: def.fonts.size_pt, lineHeight: 1.2, color: '#111111' },
+    defaultStyle: { font: def.fonts.body, fontSize: f, lineHeight: density.space < 1 ? 1.12 : 1.2, color: '#111111' },
     info: { title: options.title ?? 'Quotation', creator: 'Quotation Pad', producer: 'Quotation Pad' },
     compress: true,
     // Never breaks a page; only records where the signature slot ended up.
@@ -600,7 +671,9 @@ export function buildDocDefinition(doc: CanonicalDoc, tpl: TemplateInput, option
         const contentLeft = margins[0];
         const contentRight = pageW - margins[2];
         const align = signatureAlign(doc.blocks.find((b) => b.type === 'signature') as SignatureBlock | undefined, def);
-        const x = align === 'left' ? contentLeft : align === 'center' ? (contentLeft + contentRight - w) / 2 : contentRight - w;
+        // Side by side with the terms, the signature sits in a right-hand column.
+        const colLeft = tailFrom >= 0 ? contentRight - (w + 60) : contentLeft;
+        const x = align === 'left' ? colLeft : align === 'center' ? (colLeft + contentRight - w) / 2 : contentRight - w;
         const top = mm(safe.top);
         const bottom = pageH - mm(safe.bottom);
         slot.value = {

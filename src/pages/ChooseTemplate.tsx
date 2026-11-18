@@ -42,7 +42,7 @@ export default function ChooseTemplate() {
         if (cancelled) return;
         setThumbs((s) => ({ ...s, [t.id]: { status: 'loading' } }));
         try {
-          const result = await renderForTemplate(doc, t.id, conv.name);
+          const result = await renderForTemplate(doc, t.id, conv.name, conv.pages);
           if (!cancelled) setThumbs((s) => ({ ...s, [t.id]: { status: 'ready', pdf: result.pdf, pages: result.pages } }));
         } catch {
           if (!cancelled) setThumbs((s) => ({ ...s, [t.id]: { status: 'error' } }));
