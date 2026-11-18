@@ -3,6 +3,7 @@ import type { Align, LabelValue, Run } from '@/schema/canonical';
 import { metaOf } from './reconstruct';
 import { refineBlocks } from './refine';
 import { classifyTotalsLabel } from '@/validate/totals';
+import { subtractTokens } from '@/validate/coverage';
 import { inferColAlign } from './tableUtil';
 import { finalizeBlocks, type ExtractResult, type XBlock } from './types';
 
@@ -398,10 +399,12 @@ export function finishDocx(html: DocxHtml): ExtractResult {
   if (images > 0) {
     warnings.push(`${images} picture${images > 1 ? 's' : ''} in the Word file (logo, stamp or signature image) ${images > 1 ? 'were' : 'was'} not copied.`);
   }
+  const repeated: string[] = [];
+  const doc = finalizeBlocks(refineBlocks(blocks, repeated));
   return {
-    doc: finalizeBlocks(refineBlocks(blocks)),
-    sourceText: text,
-    removed: [],
+    doc,
+    sourceText: subtractTokens(text, repeated.join(' ')),
+    removed: repeated,
     warnings,
     method: 'docx',
     pages: 1,

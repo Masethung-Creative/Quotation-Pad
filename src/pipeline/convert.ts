@@ -1,3 +1,4 @@
+import { splitPairs } from '@/render/body';
 import { blobBytes, db, signaturePosition, type Conversion, type SavedSignature } from '@/db/db';
 import type { ExtractOptions } from '@/extract';
 import type { ExtractResult } from '@/extract/types';
@@ -39,9 +40,10 @@ export async function runExtraction(file: Blob, kind: FileKind, options: Extract
 
 /**
  * Bump when the reader gets better at a kind of file, so quotations read by an older
- * version are read again (2: ruled boxes in PDFs, layout tables and tab tables in Word).
+ * version are read again (2: ruled boxes in PDFs, layout tables and tab tables in Word;
+ * 3: the document type becomes the title).
  */
-export const EXTRACTOR_VERSION = 2;
+export const EXTRACTOR_VERSION = 3;
 
 /** Kinds of file the latest reader improved; scans are not re-read (OCR is slow). */
 const IMPROVED: ExtractResult['method'][] = ['pdf-text', 'pdf-mixed', 'docx'];
@@ -190,7 +192,7 @@ export async function verifyOutput(pdf: Uint8Array, doc: CanonicalDoc, def: Temp
 }
 
 // ---------------------------------------------------------------------------------------
-// File name: <template>_<customer or ref>_<DD-MM-YYYY>.pdf
+// File name: <Bill No> - <Letterpad name>.pdf
 // ---------------------------------------------------------------------------------------
 
 const COMPANY_RE = /\b(pvt|private|ltd|limited|llp|inc|corporation|corp|company|co\.|industries|enterprises?|traders?|trading|mills|works|agencies|associates|solutions|systems|electricals?|engineering|constructions?|hospital|school|college|bank|society|trust|foundation)\b|^m\/s\.?\s|&/i;
@@ -260,8 +262,44 @@ export function filePart(text: string, max = 40): string {
   );
 }
 
+/** Every "label: value" written in the document: reference details, the details box, text lines. */
+function labelledValues(doc: CanonicalDoc): { label: string; value: string }[] {
+  const out: { label: string; value: string }[] = [];
+  const fromText = (text: string) => {
+    for (const line of text.split('\n')) for (const p of splitPairs(line) ?? []) if (p.value) out.push(p);
+  };
+  for (const block of doc.blocks) {
+    if (block.type === 'meta') out.push(...block.items);
+    else if (block.type === 'table') block.rows.slice(0, 3).forEach((row) => row.forEach(fromText));
+    else if (block.type === 'paragraph') fromText(block.runs.map((r) => r.text).join(''));
+  }
+  return out;
+}
+
+const NUMBER_LABEL = /\b(no|number|num|#)\b\.?$|\bno\.?\s*$/i;
+const BILL_LABELS = [
+  /\b(bill|invoice|inv)\b/i,
+  /\b(quotation|quote|qtn|estimate|proforma|offer)\b/i,
+  /\bref(erence)?\b/i,
+];
+
+/** The bill / invoice / quotation number the document gives itself (not the customer's PO number). */
+export function billNumber(doc: CanonicalDoc): string | null {
+  const pairs = labelledValues(doc).filter((p) => !/date|vendor|gst|pan|p\.?\s*o\b|order|enquiry|enq|mobile|phone|cell/i.test(p.label));
+  for (const kind of BILL_LABELS) {
+    const hit = pairs.find((p) => kind.test(p.label) && (NUMBER_LABEL.test(p.label.trim()) || /^ref(erence)?$/i.test(p.label.trim())));
+    const value = hit?.value.trim().split(/\s{2,}/)[0];
+    if (value) return value;
+  }
+  return null;
+}
+
+/**
+ * Download name: "<Bill No> - <Letterpad name>.pdf", e.g. "334 - Mass Service Tech.pdf".
+ * Without a number: the customer, else the date, in its place.
+ */
 export function outputFileName(def: TemplateDef, doc: CanonicalDoc, createdAt: number): string {
-  const who = filePart(customerName(doc) ?? referenceNumber(doc) ?? '') || 'Quotation';
-  const date = quotationDate(doc) ?? formatDateDMY(new Date(createdAt));
-  return `${filePart(def.file_prefix ?? def.display_name, 30) || 'Quotation'}_${who}_${date}.pdf`;
+  const pad = def.display_name.replace(/[\\/:*?"<>|]+/g, ' ').replace(/\s+/g, ' ').trim() || 'Quotation';
+  const first = filePart(billNumber(doc) ?? '', 40) || filePart(customerName(doc) ?? '', 40) || (quotationDate(doc) ?? formatDateDMY(new Date(createdAt)));
+  return `${first} - ${pad}.pdf`;
 }

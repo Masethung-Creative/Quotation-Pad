@@ -35,7 +35,6 @@ async function imageCount(bytes: Uint8Array): Promise<{ images: number; masked: 
   return { images, masked };
 }
 
-const DATE = /\d{2}-\d{2}-\d{4}/;
 
 test.describe('Word quotation (15-row table)', () => {
   test('upload -> template -> PDF on that letterhead with every row', async ({ page }) => {
@@ -47,9 +46,10 @@ test.describe('Word quotation (15-row table)', () => {
     expect(text).toContain('நன்றி');
     expect(text).toContain('धन्यवाद');
     await finish(page);
-    await expect(page.getByTestId('file-name')).toHaveText(/^RM-Smart-Service-Tech_Kaveri-Textile-Mills-Pvt-Ltd_17-11-2026\.pdf$/);
+    // "<Bill No> - <Letterpad name>.pdf"
+    await expect(page.getByTestId('file-name')).toHaveText('Q-2026-27-045 - RM Smart Service Tech.pdf');
     const result = await downloadResult(page);
-    expect(result.name).toBe('RM-Smart-Service-Tech_Kaveri-Textile-Mills-Pvt-Ltd_17-11-2026.pdf');
+    expect(result.name).toBe('Q-2026-27-045 - RM Smart Service Tech.pdf');
     expect(result.pages.length).toBeGreaterThanOrEqual(1);
     expect(result.pages.length).toBeLessThanOrEqual(2);
     const all = result.pages.join('\n');
@@ -87,7 +87,7 @@ test.describe('Digital PDF with a wrong amount', () => {
     expect(result.pages[0]).toContain('MASS SERVICE TECH');
     expect(result.pages[1]).toContain('MASS SERVICE TECH');
     expect(result.pages.join(' ')).not.toContain('Page 1 of 2');
-    expect(result.name).toMatch(/^Mass-Service-Tech_Kaveri-Textile-Mills-Pvt-Ltd_17-11-2026\.pdf$/);
+    expect(result.name).toBe('Q-2026-27-046 - Mass Service Tech.pdf');
   });
 });
 
@@ -247,7 +247,7 @@ test.describe('Phone flow', () => {
     await expect.poll(() => sharedFiles(page)).toHaveLength(1);
     const [shared] = await sharedFiles(page);
     expect(shared.type).toBe('application/pdf');
-    expect(shared.name).toMatch(new RegExp(`^Mass-Service-Tech_Kaveri-Textile-Mills-Pvt-Ltd_${DATE.source}\\.pdf$`));
+    expect(shared.name).toBe('Q-2026-27-045 - Mass Service Tech.pdf');
     expect(taps).toBeLessThanOrEqual(5);
   });
 

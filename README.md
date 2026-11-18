@@ -55,7 +55,7 @@ npm run preview      # http://localhost:4391
 2. **Reading**: the app reads it on your device. Nothing is uploaded anywhere.
 3. **Choose template**: tap the company the quotation should go out under (Mass Service Tech or RM Smart Service Tech). Each card shows your quotation on that letterhead.
 4. **Review & sign**: check the text, tables and totals. Amber marks show what needs a look (a wrong total, amount in words that does not match, a word the scanner was unsure of). The app never changes your numbers by itself. Optionally switch on **Add signature** (draw it, or photograph it on white paper).
-5. **Done**: **Download PDF** or **Share** (WhatsApp, Gmail ...). File name: `<Company>_<Customer>_<DD-MM-YYYY>.pdf`.
+5. **Done**: **Download PDF** or **Share** (WhatsApp, Gmail ...). File name: `<Bill No> - <Letterpad name>.pdf`, for example `334 - Mass Service Tech.pdf` (no bill number found: the customer, else the date).
 
 Try it with the files in `samples/`.
 

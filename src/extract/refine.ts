@@ -296,9 +296,44 @@ function dropEmpty(blocks: XBlock[]): XBlock[] {
   });
 }
 
+const DOC_TYPE_RE = /\b(?:type|document)\s*:\s*(tax\s+invoice|proforma\s+invoice|pro-forma\s+invoice|invoice|quotation|estimate|proforma|purchase\s+order|delivery\s+challan|work\s+order)\b/i;
+const CONTACT_RE = /@[\w-]+\.\w|(?:\+?91[\s-]?)?\b[6-9]\d{4}[\s-]?\d{5}\b|\b\d{6}\b/;
+
 /**
- * @param repeated receives the table heading rows that were dropped because the table
- *   simply continued on the next page.
+ * The sender's own letterhead typed after the signature (company name, address, phone,
+ * e-mail): the chosen template prints the letterhead, so these lines are left out (and
+ * listed as left out on purpose, so the content check does not count them as lost).
+ */
+function dropTrailingLetterhead(blocks: XBlock[], repeated: string[]): XBlock[] {
+  let sig = -1;
+  for (let i = blocks.length - 1; i >= 0 && sig < 0; i--) if (blocks[i].type === 'signature') sig = i;
+  if (sig < 0) return blocks;
+  const tail = blocks.slice(sig + 1).filter((b) => b.type !== 'spacer');
+  if (tail.length < 2 || tail.length > 6) return blocks;
+  const short = tail.every((b) => (b.type === 'paragraph' || b.type === 'heading') && !blockText(b).includes('\n') && blockText(b).length <= 130);
+  const contacts = tail.filter((b) => CONTACT_RE.test(blockText(b))).length;
+  if (!short || contacts < 2) return blocks;
+  repeated.push(...tail.map((b) => blockText(b)));
+  return blocks.slice(0, sig + 1);
+}
+
+/**
+ * No title in the source, but it says what it is ("TYPE: INVOICE" in the details box):
+ * print that as the title. It is an ordinary heading block, so it can be edited or removed.
+ */
+function addTitle(blocks: XBlock[]): XBlock[] {
+  const head = blocks.filter((b) => b.type !== 'spacer').slice(0, 4);
+  if (head.some((b) => b.type === 'heading')) return blocks;
+  for (const b of head) {
+    const m = blockText(b).match(DOC_TYPE_RE);
+    if (m) return [{ type: 'heading', text: m[1].replace(/\s+/g, ' ').toUpperCase(), level: 1, align: 'center', _conf: 1 }, ...blocks];
+  }
+  return blocks;
+}
+
+/**
+ * @param repeated receives text left out on purpose: table heading rows repeated on the
+ *   next page, and the sender's letterhead typed after the signature.
  */
 export function refineBlocks(blocks: XBlock[], repeated: string[] = []): XBlock[] {
   let out = dropEmpty(blocks);
@@ -306,6 +341,8 @@ export function refineBlocks(blocks: XBlock[], repeated: string[] = []): XBlock[
   out = splitTableTotals(out);
   out = attachAmountInWords(out);
   out = detectSignature(out);
+  out = dropTrailingLetterhead(out, repeated);
   out = mergeMeta(out);
+  out = addTitle(out);
   return tidySpacers(out);
 }

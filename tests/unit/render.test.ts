@@ -5,6 +5,7 @@ import { PDFDocument, PDFName, PDFRawStream, type PDFDict } from 'pdf-lib';
 import { createCanvas } from '@napi-rs/canvas';
 import { renderPdf, signPdf } from '@/render/core';
 import { buildDocDefinition, mm, PAGE_PT, resolveForTemplate, type TemplateInput } from '@/render/docdef';
+import { BODY } from '@/render/body';
 import { DEFAULT_OFFSET, fitImage, offsetFromBox, signatureBox } from '@/render/signature';
 import { docText, parseCanonical, type CanonicalDoc } from '@/schema/canonical';
 import { asciiTokens, compareCoverage } from '@/validate/coverage';
@@ -49,7 +50,7 @@ describe('document definition on a template', () => {
     const { definition } = buildDocDefinition(spec, kaveri);
     const first = def.first_page.safe_area_mm;
     const next = def.continuation!.safe_area_mm;
-    expect(definition.pageMargins).toEqual([mm(Math.max(first.left, next.left)), mm(next.top), mm(Math.max(first.right, next.right)), mm(Math.max(first.bottom, next.bottom))]);
+    expect(definition.pageMargins).toEqual([mm(Math.max(first.left, next.left)), mm(next.top + BODY.topGapMm), mm(Math.max(first.right, next.right)), mm(Math.max(first.bottom, next.bottom))]);
     const content = definition.content as { margin?: number[] }[];
     expect(content[0].margin?.[1]).toBeCloseTo(mm(first.top - next.top), 5);
   });

@@ -129,20 +129,31 @@ describe('ruled boxes in a digital PDF', async () => {
     });
   });
 
-  it('puts the company line above "Proprietor" into the signature', () => {
-    expect(strip(doc)).toEqual(['table', 'table', 'table', 'totals', 'signature']);
-    expect(doc.blocks[4]).toMatchObject({ type: 'signature', lines: ['MASS SERVICE TECH', '', 'PROPRIETOR'] });
+  it('uses "TYPE: INVOICE" as the title and puts the company line above "Proprietor" into the signature', () => {
+    expect(strip(doc)).toEqual(['heading', 'table', 'table', 'table', 'totals', 'signature']);
+    expect(doc.blocks[0]).toMatchObject({ type: 'heading', text: 'INVOICE', level: 1, align: 'center' });
+    expect(doc.blocks[5]).toMatchObject({ type: 'signature', lines: ['MASS SERVICE TECH', '', 'PROPRIETOR'] });
   });
 
-  it('keeps the source column widths when printing', async () => {
+  it('prints every part at the same width, amounts in one column, details as label : value', async () => {
     const template = await templateFromDisk('mass-service-tech');
     const { definition } = buildDocDefinition(doc, template);
     const json = JSON.stringify(definition.content);
-    const widths = [...json.matchAll(/"widths":\[([^\]]*)\]/g)].map((m) => m[1].split(',').map(Number));
+    const widths = [...json.matchAll(/"widths":\[([^\]]*)\]/g)].map((m) => m[1].split(',')).filter((w) => w.every((x) => /^[\d.]+$/.test(x))).map((w) => w.map(Number));
+    const [party, description, particulars] = widths;
     // Address | details: two equal halves, as in the source.
-    expect(widths[0][0]).toBeCloseTo(widths[0][1], 0);
-    // Description is three times as wide as each of the other columns.
-    expect(widths[1][0] / widths[1][1]).toBeGreaterThan(2.5);
+    expect(party[0]).toBeCloseTo(party[1], 0);
+    // Every table spans the same width (cell text widths + padding + lines).
+    const span = (w: number[]) => w.reduce((a, b) => a + b, 0) + w.length * 10 + (w.length + 1) * 0.6;
+    expect(span(description)).toBeCloseTo(span(party), 0);
+    expect(span(particulars)).toBeCloseTo(span(party), 0);
+    // The Amount columns of both tables are equally wide, so the figures line up.
+    expect(description[3]).toBeCloseTo(particulars[4], 1);
+    // Details: "PO Number : 4500012345", grand total with the rupee sign, words without brackets.
+    expect(json).toContain('"PO Number"');
+    expect(json).toContain('₹ 38,092.09');
+    expect(json).toContain('Amount in words: ');
+    expect(json).not.toContain('(Rupees');
   });
 });
 

@@ -1,7 +1,7 @@
 import type { Content, ContentText, TableCell, TDocumentDefinitions } from 'pdfmake/interfaces';
 import type { Align, Block, CanonicalDoc, Run, SignatureBlock, TableBlock } from '@/schema/canonical';
 import { blockText, normaliseTable } from '@/schema/canonical';
-import { looksNumeric } from '@/lib/format';
+import { amountColumn, amountWidth, BODY, columnAligns, columnWidths, isPartyBox, labelCase, splitCompanyName, splitPairs, textWidth, tint, TO_LABEL_RE, totalsAmountWidth } from './body';
 import { tokenize } from '@/validate/coverage';
 import { designFor, fillPlaceholders, PAGE_MM, resolveColour, type SafeArea, type TemplateDef, type TemplateElement } from '@/templates/schema';
 import type { PageMasks } from '@/templates/marker';
@@ -109,54 +109,6 @@ function styled(text: string, style: Style, fonts: FontUse, base: string): Conte
 
 const pdfAlign = (a: Align | undefined): 'left' | 'center' | 'right' | 'justify' => a ?? 'left';
 
-/** Rough text width in points - only used to choose sensible column widths. */
-function estimateWidth(text: string, fontSize: number): number {
-  let longest = 0;
-  for (const line of text.split('\n')) longest = Math.max(longest, line.length);
-  return longest * fontSize * 0.52;
-}
-
-function tableWidths(table: TableBlock, available: number, fontSize: number): (number | 'auto' | '*')[] {
-  const n = table.columns.length;
-  if (table.col_width && table.col_width.length === n && n > 1) {
-    // Column widths measured from the source: keep its proportions, but never squeeze a
-    // column below its longest word (or a whole amount).
-    const inner = available - n * 9;
-    const sum = table.col_width.reduce((a, b) => a + b, 0) || 1;
-    const longestWord = (text: string) => Math.max(0, ...text.split(/\s+/).map((w) => w.length));
-    const min = table.columns.map((header, c) => {
-      let chars = longestWord(header);
-      for (const row of table.rows) chars = Math.max(chars, looksNumeric(row[c] ?? '') ? (row[c] ?? '').trim().length : longestWord(row[c] ?? ''));
-      return chars * fontSize * 0.58 + 2;
-    });
-    const widths = table.col_width.map((w, c) => Math.max((w / sum) * inner, min[c]));
-    // Give back what the minimums took, from the columns that have room to spare.
-    let excess = widths.reduce((a, b) => a + b, 0) - inner;
-    while (excess > 0.5) {
-      const spare = widths.map((w, c) => Math.max(0, w - min[c]));
-      const total = spare.reduce((a, b) => a + b, 0);
-      if (total <= 0.5) break;
-      const take = Math.min(excess, total);
-      widths.forEach((w, c) => (widths[c] = w - (spare[c] / total) * take));
-      excess -= take;
-    }
-    if (excess <= 0.5) return widths;
-  }
-  const desired = table.columns.map((header, c) => {
-    let w = estimateWidth(header, fontSize);
-    for (const row of table.rows) w = Math.max(w, estimateWidth(row[c] ?? '', fontSize));
-    return w + 10;
-  });
-  const narrowLimit = available * (n <= 4 ? 0.3 : 0.22);
-  const widths: (number | 'auto' | '*')[] = desired.map((w) => (w <= narrowLimit ? 'auto' : '*'));
-  if (!widths.includes('*')) {
-    // Nothing is wide: let the widest column stretch so the table fills the line.
-    const widest = desired.indexOf(Math.max(...desired));
-    widths[widest] = '*';
-  }
-  return widths;
-}
-
 interface Ctx {
   fonts: FontUse;
   body: string;
@@ -164,48 +116,142 @@ interface Ctx {
   available: number;
   def: TemplateDef;
   accent: string;
+  /** Light company colour for table headings and the grand total. */
+  shade: string;
+  /** Size of table / totals text. */
+  tf: number;
+  /** Width of the amount column shared by every table and the totals (text width). */
+  amountW: number;
 }
+
+const gridLayout = {
+  hLineWidth: () => BODY.line,
+  vLineWidth: () => BODY.line,
+  hLineColor: () => BODY.border,
+  vLineColor: () => BODY.border,
+  paddingLeft: () => BODY.padX,
+  paddingRight: () => BODY.padX,
+  paddingTop: () => BODY.padY,
+  paddingBottom: () => BODY.padY,
+};
+
+/** Room for cell text once padding and lines are taken off. */
+const innerWidth = (available: number, n: number) => available - n * 2 * BODY.padX - (n + 1) * BODY.line;
 
 function tableContent(input: TableBlock, ctx: Ctx): Content {
   const table = normaliseTable(input);
+  if (isPartyBox(table)) return partyBox(table, ctx);
   const n = table.columns.length;
-  const size = n >= 8 ? ctx.f * 0.85 : n >= 6 ? ctx.f * 0.92 : ctx.f;
+  const size = n >= 8 ? ctx.tf * 0.88 : n >= 6 ? ctx.tf * 0.94 : ctx.tf;
   const hasHeader = table.columns.some((c) => c.trim() !== '');
+  const aligns = columnAligns(table);
   const body: TableCell[][] = [];
   if (hasHeader) {
     body.push(
       table.columns.map((c, i) => ({
         text: styled(c, { bold: true }, ctx.fonts, ctx.body),
-        alignment: pdfAlign(table.col_align[i]),
-        fillColor: '#eef0f3',
+        alignment: pdfAlign(aligns[i]),
+        fillColor: ctx.shade,
+        verticalAlignment: 'middle',
       })),
     );
   }
   for (const row of table.rows) {
-    body.push(row.map((cell, i) => ({ text: styled(cell, {}, ctx.fonts, ctx.body), alignment: pdfAlign(table.col_align[i]) })));
+    body.push(row.map((cell, i) => ({ text: styled(cell, {}, ctx.fonts, ctx.body), alignment: pdfAlign(aligns[i]), verticalAlignment: 'middle' })) as TableCell[]);
   }
   if (!body.length) return { text: '' };
+  const shared = amountColumn(table) >= 0 ? ctx.amountW * (size / ctx.tf) : 0;
   return {
     fontSize: size,
-    margin: [0, 2, 0, 6],
+    lineHeight: 1.15,
+    margin: [0, 0, 0, BODY.blockGap],
     table: {
       headerRows: hasHeader ? 1 : 0,
       // Never split a row across pages; never leave the header alone at a page bottom.
       dontBreakRows: true,
       keepWithHeaderRows: hasHeader ? 1 : 0,
-      widths: tableWidths(table, ctx.available, size),
+      widths: columnWidths(table, innerWidth(ctx.available, n), size, shared),
       body,
     },
-    layout: {
-      hLineWidth: () => 0.6,
-      vLineWidth: () => 0.6,
-      hLineColor: () => '#4b5563',
-      vLineColor: () => '#4b5563',
-      paddingLeft: () => 4,
-      paddingRight: () => 4,
-      paddingTop: () => 3,
-      paddingBottom: () => 3,
-    },
+    layout: gridLayout,
+  };
+}
+
+/** Label : value rows inside the details box: no lines, tight rows. */
+const pairLayout = {
+  hLineWidth: () => 0,
+  vLineWidth: () => 0,
+  paddingLeft: (i: number) => (i === 0 ? 0 : 3),
+  paddingRight: () => 0,
+  paddingTop: () => 1,
+  paddingBottom: () => 1,
+};
+
+/** Customer address | document details, side by side in one framed box. */
+function partyBox(table: TableBlock, ctx: Ctx): Content {
+  const size = ctx.tf;
+  const grey = (text: string, extra: Partial<ContentText> = {}): ContentText => ({ text: styled(text, { bold: true }, ctx.fonts, ctx.body), color: BODY.muted, ...extra });
+
+  const sideStack = (cell: string, customer: boolean): Content[] => {
+    const lines = cell
+      .split('\n')
+      .map((l) => l.trim())
+      .filter(Boolean);
+    const out: Content[] = [];
+    let nameDone = !customer;
+    // Details as an aligned "Label : value" list; empty values are left out.
+    const pairRows: TableCell[][] = [];
+    const flushPairs = () => {
+      if (!pairRows.length) return;
+      out.push({ table: { widths: ['auto', 'auto', '*'], body: pairRows.splice(0) }, layout: pairLayout, margin: [0, 1, 0, 1] } as Content);
+    };
+    lines.forEach((line, i) => {
+      if (customer && i === 0 && TO_LABEL_RE.test(line)) {
+        out.push(grey(line.replace(/[\s,:.-]+$/, '').toUpperCase(), { fontSize: size * 0.82, characterSpacing: 0.4, margin: [0, 0, 0, 2] }));
+        return;
+      }
+      const pairs = splitPairs(line);
+      if (pairs && (!customer || nameDone)) {
+        for (const p of pairs) {
+          if (!p.value) continue;
+          pairRows.push([
+            { ...grey(labelCase(p.label)) },
+            { text: ':', color: BODY.muted },
+            { text: styled(p.value, {}, ctx.fonts, ctx.body) },
+          ]);
+        }
+        return;
+      }
+      flushPairs();
+      if (!nameDone) {
+        nameDone = true;
+        const [name, rest] = splitCompanyName(line);
+        out.push({ text: styled(name, { bold: true }, ctx.fonts, ctx.body), fontSize: size * 1.05, margin: [0, 0, 0, 1.5] });
+        if (rest) out.push({ text: styled(rest, {}, ctx.fonts, ctx.body) });
+        return;
+      }
+      out.push({ text: styled(line, {}, ctx.fonts, ctx.body) });
+    });
+    flushPairs();
+    // A details list padded with the cell layout: its own cells already have no padding.
+    return out;
+  };
+
+  const [left, right] = table.rows[0];
+  const leftIsCustomer = !(splitPairs(left.split('\n')[0] ?? '') && !TO_LABEL_RE.test(left.split('\n')[0] ?? ''));
+  const cells: TableCell[] = [
+    { stack: sideStack(left, leftIsCustomer), margin: [2, 2, 2, 2] },
+    { stack: sideStack(right, false), margin: [2, 2, 2, 2] },
+  ];
+  const inner = innerWidth(ctx.available, 2);
+  const given = table.col_width && table.col_width.length === 2 ? table.col_width : [1, 1];
+  const share = Math.min(0.62, Math.max(0.38, given[0] / (given[0] + given[1] || 1)));
+  return {
+    fontSize: size,
+    lineHeight: 1.18,
+    margin: [0, 0, 0, BODY.blockGap],
+    table: { dontBreakRows: true, widths: [inner * share, inner * (1 - share)], body: [cells] },
+    layout: gridLayout,
   };
 }
 
@@ -230,7 +276,13 @@ function signatureContent(block: SignatureBlock, ctx: Ctx): Content {
   // The room for the signature: a blank line whose position pdfmake reports back (see SLOT_ID).
   const lineH = 2;
   stack.splice(slotAt, 0, { text: ' ', id: SLOT_ID, fontSize: lineH, lineHeight: 1, margin: [0, 2, 0, Math.max(0, boxH - lineH)] });
-  return { stack, alignment: pdfAlign(block.align ?? ctx.def.signature.align), margin: [0, 12, 0, 0], unbreakable: true };
+  return { stack, alignment: pdfAlign(signatureAlign(block, ctx.def)), margin: [0, 14, 0, 0], unbreakable: true };
+}
+
+/** The template decides where its own signature block sits; a custom one keeps its place. */
+export function signatureAlign(block: SignatureBlock | undefined, def: TemplateDef): Align {
+  if (!block || block.auto) return def.signature.align;
+  return block.align ?? def.signature.align;
 }
 
 function blockContent(block: Block, ctx: Ctx): Content | null {
@@ -269,30 +321,43 @@ function blockContent(block: Block, ctx: Ctx): Content | null {
     case 'table':
       return tableContent(block, ctx);
     case 'totals': {
-      const body: TableCell[][] = block.items.map((item) => [
-        { text: '', border: [false, false, false, false] },
-        { text: styled(item.label, { bold: item.bold }, ctx.fonts, ctx.body), alignment: 'right', border: [false, !!item.bold, false, false] },
-        { text: styled(item.value, { bold: item.bold }, ctx.fonts, ctx.body), alignment: 'right', border: [false, !!item.bold, false, false] },
-      ]);
+      // Lined up under the tables' Amount column; only the final total is highlighted.
+      const size = ctx.tf;
+      const last = block.items.length - 1;
+      const none: [boolean, boolean, boolean, boolean] = [false, false, false, false];
+      const body: TableCell[][] = block.items.map((item, i) => {
+        const grand = i === last;
+        const cell = (text: string, alignment: 'left' | 'right'): TableCell => ({
+          text: styled(text, { bold: grand }, ctx.fonts, ctx.body),
+          alignment,
+          border: grand ? ([false, true, false, true] as [boolean, boolean, boolean, boolean]) : none,
+          ...(grand ? { fillColor: ctx.shade, margin: [0, 1.5, 0, 1.5] } : {}),
+        });
+        return [{ text: '', border: none }, cell(item.label, 'right'), cell(grand ? `₹ ${item.value}` : item.value, 'right')] as TableCell[];
+      });
+      // Labels stay on one line (up to half the width).
+      const labelW = Math.min(ctx.available * 0.5, Math.max(...block.items.map((item) => textWidth(item.label, size, true) + 4), 40));
       const stack: Content[] = [];
       if (body.length) {
         stack.push({
-          table: { widths: ['*', 'auto', 'auto'], body },
-          layout: {
-            hLineWidth: () => 0.6,
-            vLineWidth: () => 0,
-            hLineColor: () => '#4b5563',
-            paddingLeft: () => 8,
-            paddingRight: () => 4,
-            paddingTop: () => 2,
-            paddingBottom: () => 2,
-          },
+          fontSize: size,
+          table: { dontBreakRows: true, widths: ['*', labelW, Math.max(ctx.amountW, totalsAmountWidth(block, size))], body },
+          layout: { ...gridLayout, vLineWidth: () => 0, paddingTop: () => 2, paddingBottom: () => 2 },
         });
       }
-      if (block.amount_in_words?.trim()) {
-        stack.push({ text: styled(block.amount_in_words.trim(), { bold: true }, ctx.fonts, ctx.body), margin: [0, 5, 0, 0] });
+      const words = block.amount_in_words?.trim().replace(/^\(\s*/, '').replace(/\s*\)\s*$/, '');
+      if (words) {
+        stack.push({
+          fontSize: size,
+          margin: [0, 6, 0, 0],
+          table: {
+            widths: ['*'],
+            body: [[{ text: [{ text: 'Amount in words: ', color: BODY.muted, bold: true }, ...styled(words, { bold: true }, ctx.fonts, ctx.body)] }]],
+          },
+          layout: gridLayout,
+        });
       }
-      return { stack, margin: [0, 0, 0, 8] };
+      return { stack, margin: [0, 0, 0, BODY.blockGap] };
     }
     case 'list': {
       const items = block.items.map((item) => ({ text: styled(item, {}, ctx.fonts, ctx.body) }));
@@ -453,12 +518,19 @@ export function buildDocDefinition(doc: CanonicalDoc, tpl: TemplateInput, option
   // pageMargins = continuation safe area. Page 1 gets a spacer for its taller header.
   const margins: [number, number, number, number] = [
     mm(Math.max(first.left, next.left)),
-    mm(next.top),
+    mm(next.top + BODY.topGapMm),
     mm(Math.max(first.right, next.right)),
     mm(Math.max(first.bottom, next.bottom)),
   ];
   const available = pageW - margins[0] - margins[2];
-  const ctx: Ctx = { fonts, body: def.fonts.body, f: def.fonts.size_pt, available, def, accent: resolveColour('primary', def, '#1d3a6b') };
+  const accent = resolveColour('primary', def, '#1d3a6b');
+  const tf = Math.min(def.fonts.size_pt, BODY.tableFont);
+  // One width for the amount column of every table and the totals, so all amounts line up.
+  const amountW = Math.max(
+    0,
+    ...doc.blocks.map((b) => (b.type === 'table' && !isPartyBox(normaliseTable(b)) ? amountWidth(normaliseTable(b), tf) : b.type === 'totals' ? totalsAmountWidth(b, tf) : 0)),
+  );
+  const ctx: Ctx = { fonts, body: def.fonts.body, f: def.fonts.size_pt, available, def, accent, shade: tint(accent, 0.88), tf, amountW };
 
   const content: Content[] = [];
   const firstPageExtra = mm(Math.max(0, first.top - next.top));
@@ -527,7 +599,7 @@ export function buildDocDefinition(doc: CanonicalDoc, tpl: TemplateInput, option
         const h = mm(box.h);
         const contentLeft = margins[0];
         const contentRight = pageW - margins[2];
-        const align = (doc.blocks.find((b) => b.type === 'signature') as SignatureBlock | undefined)?.align ?? def.signature.align;
+        const align = signatureAlign(doc.blocks.find((b) => b.type === 'signature') as SignatureBlock | undefined, def);
         const x = align === 'left' ? contentLeft : align === 'center' ? (contentLeft + contentRight - w) / 2 : contentRight - w;
         const top = mm(safe.top);
         const bottom = pageH - mm(safe.bottom);

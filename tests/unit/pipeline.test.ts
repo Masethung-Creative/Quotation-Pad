@@ -56,11 +56,20 @@ describe('file name: <template>_<customer or ref>_<DD-MM-YYYY>.pdf', () => {
     expect(d('soon')).toBeNull();
   });
 
-  it('builds the name from template, customer (or ref) and date', () => {
-    expect(outputFileName(def, quote, Date.UTC(2026, 10, 18))).toBe('Acme_Kaveri-Textile-Mills-Pvt-Ltd_17-11-2026.pdf');
-    const refOnly = doc([{ type: 'meta', items: [{ label: 'Quotation No', value: 'Q/2026-27/046' }] }]);
-    expect(outputFileName(def, refOnly, new Date(2026, 10, 18).getTime())).toBe('Acme_Q-2026-27-046_18-11-2026.pdf');
-    expect(outputFileName(def, doc([]), new Date(2026, 10, 18).getTime())).toBe('Acme_Quotation_18-11-2026.pdf');
+  it('names the file "<Bill No> - <Letterpad name>.pdf"', () => {
+    expect(outputFileName(def, quote, Date.UTC(2026, 10, 18))).toBe('Q-2026-27-045 - Acme Traders.pdf');
+    const quoteNo = doc([{ type: 'meta', items: [{ label: 'Quotation No', value: 'Q/2026-27/046' }] }]);
+    expect(outputFileName(def, quoteNo, 0)).toBe('Q-2026-27-046 - Acme Traders.pdf');
+    // The invoice number from the details box wins over the customer's PO number.
+    const invoice = doc([{ type: 'table', columns: ['', ''], col_align: ['left', 'left'], rows: [['TO\nM/s.ABC LTD', 'TYPE: INVOICE\nPO NUMBER:4500012345\nINVOICE NO:334\nINVOICE DATE:15-09-2026']] }]);
+    expect(outputFileName(def, invoice, 0)).toBe('334 - Acme Traders.pdf');
+    // "PO NUMBER:4500067890 INVOICE NO:226" on one line (Word file converted from PDF).
+    const fused = doc([para('PO NUMBER:4500067890 INVOICE NO:226')]);
+    expect(outputFileName(def, fused, 0)).toBe('226 - Acme Traders.pdf');
+    expect(outputFileName(def, doc([{ type: 'meta', items: [{ label: 'Bill No', value: 'MST/25' }] }]), 0)).toBe('MST-25 - Acme Traders.pdf');
+    // No number: the customer, else the date.
+    expect(outputFileName(def, doc([para('To,\nM/s. Sree Murugan Stores,\nSalem')]), 0)).toBe('Sree-Murugan-Stores - Acme Traders.pdf');
+    expect(outputFileName(def, doc([]), new Date(2026, 10, 18).getTime())).toBe('18-11-2026 - Acme Traders.pdf');
   });
 
   it('makes safe file-name parts, keeping Tamil and Hindi letters', () => {
