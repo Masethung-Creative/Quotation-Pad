@@ -33,7 +33,7 @@ export default function Done() {
 
   useEffect(() => {
     // Opened without a finished PDF (e.g. an old link): back to the editor.
-    if (conv && !conv.output_pdf) navigate(conv.template_id ? `/review/${conv.id}` : `/template/${conv.id}`, { replace: true });
+    if (conv && !conv.output_pdf) navigate(conv.template_id ? `/review/${conv.id}` : conv.doc_type ? `/template/${conv.id}` : `/type/${conv.id}`, { replace: true });
   }, [conv, navigate]);
 
   if (conv === undefined) return <FullPageLoading />;

@@ -8,11 +8,22 @@ export const sampleFile = (name: string) => join(SAMPLES, name);
 export const TEMPLATE_A = 'mass-service-tech';
 export const TEMPLATE_B = 'rm-smart-service-tech';
 
-/** Home (upload) -> file -> "Reading..." -> Choose template screen. */
+/**
+ * "Invoice or quotation?" (after reading) -> Choose template. Taps the given type, or the
+ * one the app suggests.
+ */
+export async function pickType(page: Page, type?: 'quotation' | 'invoice', timeout = 110_000): Promise<void> {
+  await expect(page.getByRole('heading', { name: 'Invoice or quotation?' })).toBeVisible({ timeout });
+  const card = page.locator(type ? `[data-testid="type-card"][data-type="${type}"]` : '[data-testid="type-card"][data-suggested="true"]');
+  await card.click();
+  await expect(page.getByRole('heading', { name: 'Choose template' })).toBeVisible();
+}
+
+/** Home (upload) -> file -> "Reading..." -> Invoice or quotation -> Choose template screen. */
 export async function uploadQuotation(page: Page, file: string): Promise<void> {
   await page.goto('/');
   await page.getByTestId('quotation-file').setInputFiles(sampleFile(file));
-  await expect(page.getByRole('heading', { name: 'Choose template' })).toBeVisible({ timeout: 110_000 });
+  await pickType(page);
   await expect(page.getByTestId('template-card')).toHaveCount(2);
 }
 

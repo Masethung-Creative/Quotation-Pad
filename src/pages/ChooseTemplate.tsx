@@ -74,9 +74,9 @@ export default function ChooseTemplate() {
 
   return (
     <>
-      <TopBar title="Choose template" subtitle={conv.name} back="/" />
+      <TopBar title="Choose template" subtitle={conv.name} back={`/type/${conv.id}`} />
       <Page>
-        <p className="mb-4 text-sm text-muted-foreground">Tap the company this quotation should go out under.</p>
+        <p className="mb-4 text-sm text-muted-foreground">Tap the company this {conv.doc_type === 'invoice' ? 'invoice' : 'quotation'} should go out under.</p>
         <div className="grid gap-4 sm:grid-cols-2" data-testid="template-cards">
           {TEMPLATES.map((t) => {
             const thumb = thumbs[t.id];

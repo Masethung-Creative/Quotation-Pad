@@ -1,7 +1,7 @@
 import { startTransition, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { toast } from 'sonner';
-import { Check, CheckCircle2, ChevronRight, CircleAlert, Eye, ListChecks, MoreVertical, Pencil, RotateCcw, ScanText, Stamp, Trash2, TriangleAlert } from 'lucide-react';
+import { Check, CheckCircle2, ChevronRight, CircleAlert, Eye, FileText, ListChecks, MoreVertical, Pencil, RotateCcw, ScanText, Stamp, Trash2, TriangleAlert } from 'lucide-react';
 import { BottomBar, FullPageLoading, Page, Spinner, TopBar, useObjectUrl } from '@/components/AppShell';
 import { PdfPages } from '@/components/PdfPages';
 import { Button } from '@/components/ui/button';
@@ -15,6 +15,7 @@ import { friendlyError } from '@/lib/errors';
 import { useNavigate, useParams } from '@/lib/router';
 import { cn, debounce, uid } from '@/lib/utils';
 import { currentDoc, finalPdf, outputFileName, renderForTemplate, renderKey, verifyOutput } from '@/pipeline/convert';
+import { replacedTitle } from '@/pipeline/docType';
 import type { RenderResult } from '@/render';
 import { DEFAULT_OFFSET, type SignatureOffset } from '@/render/signature';
 import { BLOCK_ICON, EditPanel } from '@/review/EditPanel';
@@ -81,13 +82,14 @@ export default function Review() {
     setConv(c ?? null);
     if (c) {
       if (!c.template_id || !getTemplate(c.template_id)) {
-        navigate(`/template/${c.id}`, { replace: true });
+        navigate(c.doc_type ? `/template/${c.id}` : `/type/${c.id}`, { replace: true });
         return;
       }
       const doc = currentDoc(c);
       setBlocks(doc ? toEditor(doc) : []);
       setTemplateId(c.template_id);
-      setLeftOutState({ sourceText: c.source_text, removed: c.removed });
+      // The original title swapped for the chosen type's is not a lost word.
+      setLeftOutState({ sourceText: subtractTokens(c.source_text, replacedTitle(c.extracted_json, c.doc_type)), removed: c.removed });
       setSign(c.sign ?? { on: false, signature_id: null });
     }
     loaded.current = true;
@@ -266,7 +268,7 @@ export default function Review() {
         edited_json: doc,
         output_pdf: await storable(new Blob([pdf as BlobPart], { type: 'application/pdf' })),
         output_pages: rendered.pages,
-        output_name: outputFileName(def, doc, conv.created_at),
+        output_name: outputFileName(def, doc, conv.created_at, conv.doc_type),
         status: 'rendered',
         sign,
         warnings,
@@ -462,6 +464,14 @@ export default function Review() {
             <MenuContent align="end">
               <MenuItem onSelect={() => navigate(`/template/${conv.id}`)}>
                 <Stamp /> Choose another template
+              </MenuItem>
+              <MenuItem
+                onSelect={() => {
+                  save.flush();
+                  navigate(`/type/${conv.id}`);
+                }}
+              >
+                <FileText /> {conv.doc_type === 'invoice' ? 'Change to Quotation' : conv.doc_type === 'quotation' ? 'Change to Tax Invoice' : 'Invoice or quotation'}
               </MenuItem>
               {flagCount > 0 ? (
                 <MenuItem onSelect={markChecked}>

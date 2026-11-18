@@ -1,5 +1,5 @@
 import { expect, test } from '@playwright/test';
-import { chooseTemplate, sampleFile, sharedFiles, stubShare, TEMPLATE_A } from './helpers';
+import { chooseTemplate, pickType, sampleFile, sharedFiles, stubShare, TEMPLATE_A } from './helpers';
 
 /**
  * "With mobile data off (after the first load): upload -> template -> share still works."
@@ -28,7 +28,7 @@ test.describe('Offline after the first load', () => {
     for (const file of ['quotation.docx', 'quotation-photo.jpg']) {
       await page.goto('/');
       await page.getByTestId('quotation-file').setInputFiles(sampleFile(file));
-      await expect(page.getByRole('heading', { name: 'Choose template' })).toBeVisible({ timeout: 120_000 });
+      await pickType(page, undefined, 120_000);
       await chooseTemplate(page, TEMPLATE_A);
       await page.getByTestId('finish').click();
       const anyway = page.getByTestId('finish-anyway');

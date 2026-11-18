@@ -5,7 +5,7 @@
 Upload a plain quotation (Word, PDF, scan or phone photo), pick one of your company templates, check it, optionally sign it, and download or share the PDF on your letterhead. It runs entirely in the browser: no server, no paid API, no database service. Files never leave the device.
 
 ```
-Upload  ->  Reading...  ->  Choose template  ->  Review & sign  ->  Done (Download / Share)
+Upload  ->  Reading...  ->  Invoice or quotation  ->  Choose template  ->  Review & sign  ->  Done (Download / Share)
 ```
 
 Phase 1 (this repository) is the MVP: built-in company templates, Word/PDF/scan/photo reading, totals checking, signatures, offline use, Cloudflare Access. Phases 2 and 3 (Word output, seals, history, backup, template builder, etc.) are not built yet.
@@ -53,9 +53,10 @@ npm run preview      # http://localhost:4391
 
 1. **Upload**: tap **Choose a file** (or **Take a photo** on a phone) and pick a quotation: Word `.docx`, PDF, scanned PDF, or a photo (JPG, PNG, HEIC). Old `.doc` files: save them as `.docx` first.
 2. **Reading**: the app reads it on your device. Nothing is uploaded anywhere.
-3. **Choose template**: tap the company the quotation should go out under (Mass Service Tech or RM Smart Service Tech). Each card shows your quotation on that letterhead.
-4. **Review & sign**: check the text, tables and totals. Amber marks show what needs a look (a wrong total, amount in words that does not match, a word the scanner was unsure of). The app never changes your numbers by itself. Optionally switch on **Add signature** (draw it, or photograph it on white paper).
-5. **Done**: **Download PDF** or **Share** (WhatsApp, Gmail ...). File name: `<Bill No> - <Letterpad name>.pdf`, for example `334 - Mass Service Tech.pdf` (no bill number found: the customer, else the date).
+3. **Invoice or quotation**: tap what the document is. The app pre-selects its guess (from words like "Invoice" near the top); just confirm it or tap the other one. It only changes the printed title: **QUOTATION** or **TAX INVOICE**. The letterheads are the same for both. Changed your mind later? Review & sign > menu (three dots) > **Change to ...**.
+4. **Choose template**: tap the company the quotation should go out under (Mass Service Tech or RM Smart Service Tech). Each card shows your quotation on that letterhead.
+5. **Review & sign**: check the text, tables and totals. Amber marks show what needs a look (a wrong total, amount in words that does not match, a word the scanner was unsure of). The app never changes your numbers by itself. Optionally switch on **Add signature** (draw it, or photograph it on white paper).
+6. **Done**: **Download PDF** or **Share** (WhatsApp, Gmail ...). File name: `<Bill No> - <Invoice or Quotation> - <Letterpad name>.pdf`, for example `334 - Invoice - Mass Service Tech.pdf` (no bill number found: the customer, else the date).
 
 Try it with the files in `samples/`.
 

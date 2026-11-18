@@ -50,7 +50,7 @@ export default function Home() {
         },
       });
       if (run !== runId.current) return;
-      navigate(`/template/${id}`);
+      navigate(`/type/${id}`);
     } catch (err) {
       if (run !== runId.current) return;
       setReading(null);

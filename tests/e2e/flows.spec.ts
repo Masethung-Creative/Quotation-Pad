@@ -2,7 +2,7 @@ import { readFileSync } from 'node:fs';
 import { expect, test, type Page } from '@playwright/test';
 import { PDFDocument, PDFName, PDFRawStream } from 'pdf-lib';
 import { brokenPdf, hugePdf, legacyDoc, lockedPdf } from './fixtures';
-import { chooseTemplate, drawSignature, finish, reviewText, sampleFile, sharedFiles, stubShare, TEMPLATE_A, TEMPLATE_B, uploadQuotation } from './helpers';
+import { chooseTemplate, pickType, drawSignature, finish, reviewText, sampleFile, sharedFiles, stubShare, TEMPLATE_A, TEMPLATE_B, uploadQuotation } from './helpers';
 
 /** Downloads the finished PDF from the Done screen and returns its name and text. */
 async function downloadResult(page: Page): Promise<{ name: string; bytes: Uint8Array; pages: string[] }> {
@@ -47,9 +47,9 @@ test.describe('Word quotation (15-row table)', () => {
     expect(text).toContain('धन्यवाद');
     await finish(page);
     // "<Bill No> - <Letterpad name>.pdf"
-    await expect(page.getByTestId('file-name')).toHaveText('Q-2026-27-045 - RM Smart Service Tech.pdf');
+    await expect(page.getByTestId('file-name')).toHaveText('Q-2026-27-045 - Quotation - RM Smart Service Tech.pdf');
     const result = await downloadResult(page);
-    expect(result.name).toBe('Q-2026-27-045 - RM Smart Service Tech.pdf');
+    expect(result.name).toBe('Q-2026-27-045 - Quotation - RM Smart Service Tech.pdf');
     expect(result.pages.length).toBeGreaterThanOrEqual(1);
     expect(result.pages.length).toBeLessThanOrEqual(2);
     const all = result.pages.join('\n');
@@ -87,7 +87,7 @@ test.describe('Digital PDF with a wrong amount', () => {
     expect(result.pages[0]).toContain('MASS SERVICE TECH');
     expect(result.pages[1]).toContain('MASS SERVICE TECH');
     expect(result.pages.join(' ')).not.toContain('Page 1 of 2');
-    expect(result.name).toBe('Q-2026-27-046 - Mass Service Tech.pdf');
+    expect(result.name).toBe('Q-2026-27-046 - Quotation - Mass Service Tech.pdf');
   });
 });
 
@@ -97,7 +97,7 @@ test.describe('Scans and photos (OCR)', () => {
       await page.goto('/');
       await page.getByTestId('quotation-file').setInputFiles(sampleFile(file));
       await expect(page.getByTestId('extract-progress')).toBeVisible();
-      await expect(page.getByRole('heading', { name: 'Choose template' })).toBeVisible({ timeout: 120_000 });
+      await pickType(page, undefined, 120_000);
       await chooseTemplate(page, TEMPLATE_A);
       const text = await reviewText(page);
       for (const amount of ['18,500.00', '10,080.00', '18,900.00', '9,100.00', '7,500.00', '64,080.00', '5,767.20', '75,614.40']) expect(text).toContain(amount);
@@ -219,13 +219,13 @@ test.describe('Errors: plain English and a Try again button', () => {
       const chooser = page.waitForEvent('filechooser');
       await page.getByTestId('try-again').click();
       await (await chooser).setFiles(sampleFile('quotation.docx'));
-      await expect(page.getByRole('heading', { name: 'Choose template' })).toBeVisible({ timeout: 60_000 });
+      await pickType(page, undefined, 60_000);
     });
   }
 });
 
 test.describe('Phone flow', () => {
-  test('360 px Android: upload -> pick template -> share in 5 taps or fewer', async ({ page, isMobile }) => {
+  test('360 px Android: upload -> type -> pick template -> share in 6 taps or fewer', async ({ page, isMobile }) => {
     test.skip(!isMobile, 'Phone check');
     await page.setViewportSize({ width: 360, height: 740 });
     await stubShare(page);
@@ -236,6 +236,8 @@ test.describe('Phone flow', () => {
     taps++;
     await (await chooser).setFiles(sampleFile('quotation.docx'));
     taps++; // picking the file in the phone's file picker
+    await page.locator('[data-testid="type-card"][data-suggested="true"]').click();
+    taps++;
     await page.locator(`[data-testid="template-card"][data-template="${TEMPLATE_A}"]`).click();
     taps++;
     await expect(page.getByTestId('finish')).toBeEnabled({ timeout: 60_000 });
@@ -247,8 +249,8 @@ test.describe('Phone flow', () => {
     await expect.poll(() => sharedFiles(page)).toHaveLength(1);
     const [shared] = await sharedFiles(page);
     expect(shared.type).toBe('application/pdf');
-    expect(shared.name).toBe('Q-2026-27-045 - Mass Service Tech.pdf');
-    expect(taps).toBeLessThanOrEqual(5);
+    expect(shared.name).toBe('Q-2026-27-045 - Quotation - Mass Service Tech.pdf');
+    expect(taps).toBeLessThanOrEqual(6);
   });
 
   test('no sideways scrolling and every control is at least 44 px', async ({ page, isMobile }) => {

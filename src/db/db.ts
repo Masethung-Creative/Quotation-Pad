@@ -4,6 +4,7 @@ import type { OcrLang } from '@/extract/ocr';
 import type { FileKind } from '@/ingest/detect';
 import type { SignatureOffset } from '@/render/signature';
 import type { CanonicalDoc } from '@/schema/canonical';
+import type { DocType } from '@/pipeline/docType';
 
 /**
  * Everything lives in IndexedDB on this device: quotations, saved signatures, settings.
@@ -26,6 +27,8 @@ export interface Conversion {
   original_type: FileKind;
   extracted_json: CanonicalDoc | null;
   edited_json: CanonicalDoc | null;
+  /** Invoice or quotation, picked after upload (missing on quotations saved before this step existed). */
+  doc_type?: DocType | null;
   /** Chosen company template (null until one is picked). */
   template_id: string | null;
   sign: SignChoice;

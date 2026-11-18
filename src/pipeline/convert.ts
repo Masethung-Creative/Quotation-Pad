@@ -13,6 +13,7 @@ import { docText } from '@/schema/canonical';
 import { loadTemplateBundle } from '@/templates';
 import type { TemplateDef } from '@/templates/schema';
 import { asciiTokens, compareCoverage, type CoverageReport } from '@/validate/coverage';
+import { DOC_TYPES, withDocTitle, type DocType } from './docType';
 
 /** Glue between the pipeline steps and IndexedDB. */
 
@@ -95,6 +96,7 @@ export async function createConversion(file: File, options: ExtractOptions): Pro
     original_type: kind,
     extracted_json: result.doc,
     edited_json: null,
+    doc_type: null,
     template_id: null,
     sign: { on: false, signature_id: null },
     output_pdf: null,
@@ -142,8 +144,13 @@ export async function reExtract(conversion: Conversion, options: ExtractOptions)
   });
 }
 
+/**
+ * The document as it stands: the user's edits, else what was read, with the title of the
+ * chosen type (Quotation / Tax Invoice). Edits keep whatever title the user left.
+ */
 export function currentDoc(conversion: Conversion): CanonicalDoc | null {
-  return conversion.edited_json ?? conversion.extracted_json;
+  if (conversion.edited_json) return conversion.edited_json;
+  return conversion.extracted_json ? withDocTitle(conversion.extracted_json, conversion.doc_type) : null;
 }
 
 // ---------------------------------------------------------------------------------------
@@ -325,11 +332,12 @@ export function billNumber(doc: CanonicalDoc): string | null {
 }
 
 /**
- * Download name: "<Bill No> - <Letterpad name>.pdf", e.g. "334 - Mass Service Tech.pdf".
+ * Download name: "<Bill No> - <Type> - <Letterpad name>.pdf", e.g. "334 - Invoice - Mass Service Tech.pdf"
+ * (without a chosen type: "334 - Mass Service Tech.pdf").
  * Without a number: the customer, else the date, in its place.
  */
-export function outputFileName(def: TemplateDef, doc: CanonicalDoc, createdAt: number): string {
+export function outputFileName(def: TemplateDef, doc: CanonicalDoc, createdAt: number, docType?: DocType | null): string {
   const pad = def.display_name.replace(/[\\/:*?"<>|]+/g, ' ').replace(/\s+/g, ' ').trim() || 'Quotation';
   const first = filePart(billNumber(doc) ?? '', 40) || filePart(customerName(doc) ?? '', 40) || (quotationDate(doc) ?? formatDateDMY(new Date(createdAt)));
-  return `${first} - ${pad}.pdf`;
+  return docType ? `${first} - ${DOC_TYPES[docType].file} - ${pad}.pdf` : `${first} - ${pad}.pdf`;
 }

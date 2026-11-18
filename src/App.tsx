@@ -7,6 +7,7 @@ import { checkSession, goToLogin } from '@/lib/session';
 import Home from '@/pages/Home';
 
 // Only the upload screen is in the first download; every other screen loads on demand.
+const ChooseType = lazy(() => import('@/pages/ChooseType'));
 const ChooseTemplate = lazy(() => import('@/pages/ChooseTemplate'));
 const Review = lazy(() => import('@/pages/Review'));
 const Done = lazy(() => import('@/pages/Done'));
@@ -15,6 +16,7 @@ const Toaster = lazy(() => import('sonner').then((m) => ({ default: m.Toaster })
 
 const ROUTES: RouteDef[] = [
   { path: '/', element: <Home /> },
+  { path: '/type/:id', element: <ChooseType /> },
   { path: '/template/:id', element: <ChooseTemplate /> },
   { path: '/review/:id', element: <Review /> },
   { path: '/done/:id', element: <Done /> },

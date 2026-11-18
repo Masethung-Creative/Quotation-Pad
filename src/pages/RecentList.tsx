@@ -8,7 +8,7 @@ import { formatWhen } from '@/lib/utils';
 /** The last few quotations, to pick up where you left off. Loaded after the first screen is shown. */
 
 function RecentItem({ item }: { item: Conversion }) {
-  const target = item.status === 'rendered' && item.output_pdf ? `/done/${item.id}` : item.template_id ? `/review/${item.id}` : `/template/${item.id}`;
+  const target = item.status === 'rendered' && item.output_pdf ? `/done/${item.id}` : item.template_id ? `/review/${item.id}` : item.doc_type ? `/template/${item.id}` : `/type/${item.id}`;
   return (
     <li className="border-b last:border-b-0">
       <Link to={target} className="flex min-h-14 items-center gap-3 px-3 py-2 hover:bg-muted/60">

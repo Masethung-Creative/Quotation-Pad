@@ -1,5 +1,5 @@
 import { expect, test, type Page } from '@playwright/test';
-import { chooseTemplate, finish, pagePng, sampleFile, TEMPLATE_A, TEMPLATE_B, uploadQuotation } from './helpers';
+import { chooseTemplate, pickType, finish, pagePng, sampleFile, TEMPLATE_A, TEMPLATE_B, uploadQuotation } from './helpers';
 
 /**
  * Golden-file visual tests: render through the real app, then compare every finished page
@@ -39,7 +39,7 @@ test.describe('Golden pages', () => {
   test('specification example with a photographed signature', async ({ page }) => {
     await page.goto('/');
     await page.getByTestId('quotation-file').setInputFiles(sampleFile('spec-example.json'));
-    await expect(page.getByRole('heading', { name: 'Choose template' })).toBeVisible();
+    await pickType(page);
     await chooseTemplate(page, TEMPLATE_B);
     await page.getByTestId('sign-toggle').click();
     await page.getByRole('radio', { name: /Photo/ }).click();

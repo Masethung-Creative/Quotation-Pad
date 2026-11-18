@@ -72,9 +72,10 @@ test.describe('Performance on a mid-range phone', () => {
     await slowPhone(page, null);
     const t0 = Date.now();
     await page.getByTestId('quotation-file').setInputFiles(sampleFile('quotation.docx'));
-    await expect(page.getByRole('heading', { name: 'Choose template' })).toBeVisible({ timeout: 30_000 });
+    await expect(page.getByRole('heading', { name: 'Invoice or quotation?' })).toBeVisible({ timeout: 30_000 });
     const tRead = Date.now() - t0;
     const t1 = Date.now();
+    await page.locator('[data-testid="type-card"][data-suggested="true"]').click();
     await page.locator(`[data-testid="template-card"][data-template="${TEMPLATE_A}"]`).click();
     await expect(page.getByTestId('finish')).toBeEnabled({ timeout: 30_000 });
     await page.getByTestId('finish').click();
@@ -94,7 +95,7 @@ test.describe('Performance on a mid-range phone', () => {
     await slowPhone(page, null);
     const t0 = Date.now();
     await page.getByTestId('quotation-file').setInputFiles(sampleFile('quotation-scanned.pdf'));
-    await expect(page.getByRole('heading', { name: 'Choose template' })).toBeVisible({ timeout: 60_000 });
+    await expect(page.getByRole('heading', { name: 'Invoice or quotation?' })).toBeVisible({ timeout: 60_000 });
     const ms = Date.now() - t0;
     console.log(`[perf] scanned page, 4x slower CPU: ${ms} ms`);
     expect(ms).toBeLessThan(30_000);
