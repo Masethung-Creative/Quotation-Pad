@@ -72,12 +72,14 @@ function splitTableTotals(blocks: XBlock[]): XBlock[] {
     let words: string | undefined;
     const lowSet = new Set(table._lowCells ?? []);
 
+    let trailingEmpty = 0;
     while (table.rows.length > 1) {
       const r = table.rows.length - 1;
       const row = table.rows[r];
       const filled = row.map((c, i) => (c.trim() ? i : -1)).filter((i) => i >= 0);
       if (filled.length === 0) {
         table.rows.pop();
+        trailingEmpty++;
         continue;
       }
       const joined = filled.map((i) => row[i].trim()).join(' ');
@@ -102,13 +104,17 @@ function splitTableTotals(blocks: XBlock[]): XBlock[] {
     }
 
     if (!items.length) {
-      // Nothing was a totals row: keep the table exactly as it was.
-      out.push(block);
+      // Nothing was a totals row: keep the table exactly as it was (restore empty rows).
+      for (let e = 0; e < trailingEmpty; e++) table.rows.push(Array<string>(table.columns.length || (table.rows[0]?.length ?? 0)).fill(''));
+      out.push(block.rows.length === table.rows.length ? block : table);
       continue;
     }
     // A lone "Total" at the very end is the grand total.
     const last = items[items.length - 1];
     if (classifyTotalsLabel(last.label) === 'total') last.bold = true;
+
+    // Restore empty rows that were between the last item row and the totals.
+    for (let e = 0; e < trailingEmpty; e++) table.rows.push(Array<string>(table.columns.length || (table.rows[0]?.length ?? 0)).fill(''));
 
     // The totals rows made numeric columns look like text; judge alignment again without them.
     table.col_align = inferColAlign(table.columns, table.rows);

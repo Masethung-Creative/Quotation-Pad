@@ -824,19 +824,21 @@ function gridToBlocks(
   flow: (lines: Line[], ctx: PageContext) => void,
   out: XBlock[],
 ): void {
-  const bands = gridBands(grid, words, page, p).filter((band) => band.some((b) => b.lines.length));
-  for (let i = 0; i < bands.length; i++) {
-    const band = bands[i];
+  const allBands = gridBands(grid, words, page, p);
+  for (let i = 0; i < allBands.length; i++) {
+    const band = allBands[i];
     const filled = band.filter((b) => b.lines.length);
 
     if (band.length >= 3) {
       let j = i;
-      while (j + 1 < bands.length && sameColumns(bands[j + 1], band)) j++;
-      out.push(bandsToTable(bands.slice(i, j + 1), p));
+      while (j + 1 < allBands.length && sameColumns(allBands[j + 1], band)) j++;
+      out.push(bandsToTable(allBands.slice(i, j + 1), p));
       ctx.state.tableSeen = true;
       i = j;
       continue;
     }
+
+    if (!filled.length) continue;
 
     if (band.length === 2 && filled.length === 2) {
       const left = cellText(band[0].lines, ' ');
