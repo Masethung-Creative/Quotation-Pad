@@ -73,3 +73,32 @@ describe('editor model', () => {
     expect(pruneLowWords({ words: ['14,', 'Erode'] }, 'No. 15, Gandhi Road, Erode')).toEqual({ words: ['Erode'] });
   });
 });
+
+describe('phone item form', async () => {
+  const { amountColumnOf, describingColumn, rowCheck } = await import('@/review/ItemList');
+  const table = {
+    type: 'table' as const,
+    columns: ['S.No', 'Description', 'Qty', 'UOM', 'Rate', 'Amount'],
+    col_align: [],
+    rows: [
+      ['1', 'MCB 32A Double Pole', '24', 'Nos', '420.00', '10,080.00'],
+      ['2', 'Distribution Board 8 Way', '4', 'Nos', '2,275.00', '9,200.00'],
+    ],
+  };
+
+  it('describes each item by its text column and shows its amount', () => {
+    expect(describingColumn(table)).toBe(1);
+    expect(amountColumnOf(table)).toBe(5);
+  });
+
+  it('checks Qty x Rate against the written amount, never changing it', () => {
+    expect(rowCheck(table, 0)).toEqual({ ok: true, text: '24 × 420.00 = 10,080.00' });
+    expect(rowCheck(table, 1)).toEqual({ ok: false, text: '4 × 2,275.00 = 9,100.00 (written: 9,200.00)' });
+    expect(table.rows[1][5]).toBe('9,200.00');
+  });
+
+  it('skips the check when there is no quantity / rate, or discounts and taxes change the amount', () => {
+    expect(rowCheck({ ...table, columns: ['S.No', 'Description', 'A', 'UOM', 'B', 'Amount'] }, 0)).toBeNull();
+    expect(rowCheck({ ...table, columns: ['S.No', 'Description', 'Qty', 'Disc %', 'Rate', 'Amount'], rows: [['1', 'X', '2', '10', '100.00', '180.00']] }, 0)).toBeNull();
+  });
+});

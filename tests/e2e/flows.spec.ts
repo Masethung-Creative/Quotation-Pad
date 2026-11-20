@@ -62,7 +62,7 @@ test.describe('Word quotation (15-row table)', () => {
 });
 
 test.describe('Digital PDF with a wrong amount', () => {
-  test('flags the wrong amount in amber, jumps to it, and never changes it', async ({ page }) => {
+  test('flags the wrong amount in amber, jumps to it, and never changes it', async ({ page, isMobile }) => {
     await uploadQuotation(page, 'quotation-digital.pdf');
     await chooseTemplate(page, TEMPLATE_A);
     const banner = page.getByTestId('check-banner');
@@ -70,7 +70,9 @@ test.describe('Digital PDF with a wrong amount', () => {
     await page.getByTestId('jump-next').click();
     const flagged = page.locator('[data-testid="blocks"] [data-flag="true"]');
     await expect(flagged.first()).toBeInViewport();
-    await expect(flagged.first()).toHaveValue('9,200.00');
+    // Desktop: the amber grid cell itself. Phones: the amber note on the item in the list.
+    if (isMobile) await expect(flagged.first()).toContainText('9,200.00');
+    else await expect(flagged.first()).toHaveValue('9,200.00');
     // The sender's own header/footer and page numbers were left out on purpose.
     await page.getByRole('button', { name: 'Check details' }).click();
     await expect(page.getByTestId('removed-lines')).toContainText('SRI VELAN ELECTRICALS');
@@ -365,5 +367,54 @@ test.describe('Title bold switch', () => {
     await expect(page.getByLabel('Heading text').first()).not.toHaveClass(/font-semibold/);
     await bold.click();
     await expect(bold).toHaveAttribute('aria-pressed', 'true');
+  });
+});
+
+test.describe('Phone item editing', () => {
+  test('items are a list; tapping one opens large labelled fields with the number keypad', async ({ page, isMobile }) => {
+    test.skip(!isMobile, 'Phones and tablets only; computers keep the grid');
+    await uploadQuotation(page, 'quotation-digital.pdf');
+    await chooseTemplate(page, TEMPLATE_A);
+    await page.getByRole('radio', { name: 'Edit' }).or(page.getByRole('button', { name: 'Edit', exact: true })).first().click();
+    // No wide grid on a phone, a list instead.
+    await expect(page.getByTestId('table-editor')).toHaveCount(0);
+    const rows = page.getByTestId('item-row');
+    await expect(rows.first()).toBeVisible();
+    // Row 7 (Distribution Board 8 Way) carries the amber note about its amount.
+    await expect(rows.nth(6).locator('[data-flag="true"]')).toContainText('9,200.00');
+
+    await rows.nth(6).click();
+    const form = page.getByTestId('item-form');
+    await expect(form).toBeVisible();
+    await expect(page.getByRole('heading', { name: /Item 7 of/ })).toBeVisible();
+    const amount = form.getByLabel('Amount (Rs)');
+    await expect(amount).toHaveValue('9,200.00');
+    await expect(amount).toHaveAttribute('inputmode', 'decimal');
+    // Fields are at least 16 px so iPhones do not zoom in.
+    expect(parseFloat(await amount.evaluate((el) => getComputedStyle(el).fontSize))).toBeGreaterThanOrEqual(16);
+    await expect(page.getByTestId('item-check')).toContainText('4 × 2,275.00 = 9,100.00');
+
+    // Correcting the amount clears the check; the change shows in the list.
+    await amount.fill('9,100.00');
+    await expect(page.getByTestId('item-check')).toContainText('= 9,100.00');
+    await expect(page.getByTestId('item-check')).not.toContainText('written');
+    await page.getByTestId('next-item').click();
+    await expect(page.getByRole('heading', { name: /Item 8 of/ })).toBeVisible();
+    await page.getByTestId('item-done').click();
+    await expect(rows.nth(6)).toContainText('9,100.00');
+
+    // The form fits the screen: no sideways scrolling.
+    await rows.first().click();
+    const overflow = await page.evaluate(() => document.documentElement.scrollWidth - window.innerWidth);
+    expect(overflow).toBeLessThanOrEqual(1);
+    await page.getByTestId('item-done').click();
+
+    // Add and delete an item.
+    const before = await rows.count();
+    await page.getByTestId('add-item').click();
+    await expect(page.getByRole('heading', { name: `Item ${before + 1} of ${before + 1}` })).toBeVisible();
+    await page.getByTestId('delete-item').click();
+    await page.keyboard.press('Escape');
+    await expect(rows).toHaveCount(before);
   });
 });

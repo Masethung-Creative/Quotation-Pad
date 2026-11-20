@@ -1,4 +1,4 @@
-import { memo, useCallback, useRef } from 'react';
+import { memo, useCallback, useEffect, useRef, useState } from 'react';
 import { AlignCenter, AlignLeft, AlignRight, ArrowDown, ArrowLeft, ArrowRight, ArrowUp, ChevronDown, MoreVertical, Plus, Trash2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/input';
@@ -7,6 +7,21 @@ import type { Align, LowConfidence, TableBlock } from '@/schema/canonical';
 import { normaliseTable } from '@/schema/canonical';
 import type { Issue } from '@/validate/totals';
 import { cn } from '@/lib/utils';
+import { ItemList } from './ItemList';
+
+/** Computers (wide screen) edit the grid; phones and tablets get the item list + form. */
+const WIDE = '(min-width: 1024px)';
+function useWide(): boolean {
+  const [wide, setWide] = useState(() => typeof window !== 'undefined' && !!window.matchMedia?.(WIDE).matches);
+  useEffect(() => {
+    const mq = window.matchMedia?.(WIDE);
+    if (!mq) return;
+    const on = () => setWide(mq.matches);
+    mq.addEventListener('change', on);
+    return () => mq.removeEventListener('change', on);
+  }, []);
+  return wide;
+}
 
 interface Props {
   block: TableBlock;
@@ -60,6 +75,7 @@ function remap(cells: string[] | undefined, fn: (r: number, c: number) => [numbe
 
 export function TableEditor({ block: input, low, issues, onChange }: Props) {
   const block = normaliseTable(input);
+  const wide = useWide();
   const latest = useRef({ block, low, onChange });
   latest.current = { block, low, onChange };
 
@@ -125,6 +141,21 @@ export function TableEditor({ block: input, low, issues, onChange }: Props) {
     for (const row of block.rows) for (const line of (row[c] ?? '').split('\n')) longest = Math.max(longest, line.length);
     return Math.min(26, Math.max(6, longest + 2));
   });
+
+  if (!wide) {
+    return (
+      <ItemList
+        block={block}
+        flagged={lowSet}
+        messages={issueAt}
+        onEdit={edit}
+        onInsertRow={insertRow}
+        onDeleteRow={deleteRow}
+        onInsertCol={insertCol}
+        onDeleteCol={deleteCol}
+      />
+    );
+  }
 
   return (
     <div>

@@ -50,7 +50,8 @@ export async function finish(page: Page): Promise<void> {
 export async function reviewText(page: Page): Promise<string> {
   return page.getByTestId('blocks').evaluate((root) => {
     const parts: string[] = [];
-    root.querySelectorAll('textarea, input, [contenteditable], [data-testid="signature-block"]').forEach((el) => {
+    // Phones list table items as buttons (tap to edit), so their text counts too.
+    root.querySelectorAll('textarea, input, [contenteditable], [data-testid="signature-block"], [data-testid="item-row"]').forEach((el) => {
       parts.push(el instanceof HTMLTextAreaElement || el instanceof HTMLInputElement ? el.value : (el.textContent ?? ''));
     });
     return parts.join('\n');
