@@ -284,8 +284,8 @@ function partyBox(table: TableBlock, ctx: Ctx, join: BoxJoin = NO_JOIN): Content
       if (pairs && (!customer || nameDone)) {
         for (const p of pairs) {
           if (!p.value) continue;
-          // "Type: INVOICE" when INVOICE is already the title above the box.
-          if (/^(document\s+)?type$/i.test(p.label.trim()) && ctx.title && p.value.trim().toUpperCase() === ctx.title.trim().toUpperCase()) continue;
+          // "Type: INVOICE" when the title above the box already says it (INVOICE, TAX INVOICE).
+          if (/^(document\s+)?type$/i.test(p.label.trim()) && ctx.title && ctx.title.toUpperCase().includes(p.value.trim().toUpperCase())) continue;
           pairRows.push({
             label: p.label,
             row: [{ ...grey(labelCase(p.label)) }, { text: ':', color: BODY.muted }, { text: styled(p.value, {}, ctx.fonts, ctx.body) }],
