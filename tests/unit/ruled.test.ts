@@ -147,13 +147,34 @@ describe('ruled boxes in a digital PDF', async () => {
     const span = (w: number[]) => w.reduce((a, b) => a + b, 0) + w.length * 10 + (w.length + 1) * 0.6;
     expect(span(description)).toBeCloseTo(span(party), 0);
     expect(span(particulars)).toBeCloseTo(span(party), 0);
+    // The empty SAC Code column is folded into the heading before it.
+    expect(description).toHaveLength(3);
+    expect(json).toContain('Category of Service\\n(SAC Code)');
     // The Amount columns of both tables are equally wide, so the figures line up.
-    expect(description[3]).toBeCloseTo(particulars[4], 1);
+    expect(description[2]).toBeCloseTo(particulars[4], 1);
     // Details: "PO Number : 4500012345", grand total with the rupee sign, words without brackets.
     expect(json).toContain('"PO Number"');
     expect(json).toContain('₹ 38,092.09');
     expect(json).toContain('Amount in words: ');
     expect(json).not.toContain('(Rupees');
+    // "Type: INVOICE" is not repeated under the INVOICE title; the invoice number comes first.
+    expect(json).not.toContain('"Type"');
+  });
+
+  it('joins the address box, both tables, the totals and the words into one box', async () => {
+    const template = await templateFromDisk('mass-service-tech');
+    const { definition } = buildDocDefinition(doc, template);
+    const content = definition.content as { table?: { widths: unknown[] }; margin?: number[]; stack?: { table?: { widths: unknown[] }; margin?: number[] }[] }[];
+    const parts = content.flatMap((c) => (c.stack ? c.stack : [c])).filter((c) => c.table);
+    expect(parts).toHaveLength(4); // address | details, description, particulars, totals + words
+    // Each part after the first is pulled up onto the line above it: no gap anywhere.
+    parts.slice(1).forEach((p) => expect(p.margin?.[1]).toBeLessThan(0));
+    parts.slice(0, -1).forEach((p) => expect(p.margin?.[3]).toBe(0));
+    // Totals: label column + an Amount column exactly as wide as the item tables'.
+    const totalsW = parts[3].table!.widths as (number | string)[];
+    const itemsW = parts[2].table!.widths as number[];
+    expect(totalsW[0]).toBe('*');
+    expect(totalsW[1]).toBeCloseTo(itemsW[itemsW.length - 1], 1);
   });
 });
 

@@ -57,7 +57,7 @@ export function BlockEditor({ eb, issues, def, onChange }: Props) {
             value={block.text}
             onChange={(e) => onChange({ ...block, text: e.target.value }, pruneLowWords(low, e.target.value))}
             data-flag={flag(hasLow(low, block.text))}
-            className={cn('font-semibold', block.level === 1 ? 'text-lg' : 'text-base', hasLow(low, block.text) && flagClass)}
+            className={cn(block.bold !== false && 'font-semibold', block.level === 1 ? 'text-lg' : 'text-base', hasLow(low, block.text) && flagClass)}
             style={{ textAlign: block.align === 'justify' ? 'left' : block.align }}
           />
           <div className="flex flex-wrap items-center gap-2">
@@ -72,6 +72,16 @@ export function BlockEditor({ eb, issues, def, onChange }: Props) {
               ]}
             />
             <Segmented aria-label="Alignment" value={block.align} onChange={(align) => onChange({ ...block, align }, low)} options={ALIGN3} />
+            <button
+              type="button"
+              aria-label="Bold"
+              aria-pressed={block.bold !== false}
+              data-testid="heading-bold"
+              onClick={() => onChange({ ...block, bold: block.bold === false }, low)}
+              className={cn('flex size-11 shrink-0 items-center justify-center rounded-md border border-input', block.bold !== false ? 'border-primary bg-primary text-primary-foreground' : 'bg-card text-muted-foreground')}
+            >
+              <Bold className="size-4.5" />
+            </button>
           </div>
         </div>
       );

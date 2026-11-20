@@ -93,7 +93,9 @@ export function amountColumn(table: TableBlock): number {
 export function amountWidth(table: TableBlock, size: number): number {
   const c = amountColumn(table);
   if (c < 0) return 0;
-  return Math.max(longestWord(table.columns[c], size, true), ...table.rows.map((r) => textWidth((r[c] ?? '').trim(), size)));
+  const head = longestLine(table.columns[c], size, true);
+  // Same rule as columnWidths: a short heading ("Amount (Rs)") stays on one line.
+  return Math.max(head <= size * 7 ? head : longestWord(table.columns[c], size, true), ...table.rows.map((r) => textWidth((r[c] ?? "").trim(), size)));
 }
 
 export function totalsAmountWidth(block: TotalsBlock, size: number): number {

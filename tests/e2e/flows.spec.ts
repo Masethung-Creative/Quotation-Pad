@@ -350,3 +350,20 @@ test.describe('Quotation read by an older version of the app', () => {
     expect(text).toContain('Installation and testing charges');
   });
 });
+
+test.describe('Title bold switch', () => {
+  test('a bold title can be switched to normal weight and back', async ({ page, isMobile }) => {
+    await uploadQuotation(page, 'quotation.docx');
+    await chooseTemplate(page, TEMPLATE_A);
+    // Phones show Preview and Edit as two tabs.
+    if (isMobile) await page.getByRole('radio', { name: 'Edit' }).or(page.getByRole('button', { name: 'Edit', exact: true })).first().click();
+    const bold = page.getByTestId('heading-bold').first();
+    await bold.scrollIntoViewIfNeeded();
+    await expect(bold).toHaveAttribute('aria-pressed', 'true');
+    await bold.click();
+    await expect(bold).toHaveAttribute('aria-pressed', 'false');
+    await expect(page.getByLabel('Heading text').first()).not.toHaveClass(/font-semibold/);
+    await bold.click();
+    await expect(bold).toHaveAttribute('aria-pressed', 'true');
+  });
+});

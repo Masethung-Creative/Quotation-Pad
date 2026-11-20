@@ -28,6 +28,8 @@ export interface HeadingBlock {
   text: string;
   level: 1 | 2 | 3;
   align: Align;
+  /** Printed bold unless switched off (false). */
+  bold?: boolean;
 }
 export interface MetaBlock {
   type: 'meta';
@@ -107,6 +109,7 @@ const blockSchema = z.discriminatedUnion('type', [
     text: z.string(),
     level: z.union([z.literal(1), z.literal(2), z.literal(3)]).default(1),
     align: align.default('center'),
+    bold: z.boolean().optional(),
   }),
   z.object({ type: z.literal('meta'), items: z.array(labelValue) }),
   z.object({

@@ -1,7 +1,7 @@
 import type { Content, ContentText, TableCell, TDocumentDefinitions } from 'pdfmake/interfaces';
-import type { Align, Block, CanonicalDoc, Run, SignatureBlock, TableBlock } from '@/schema/canonical';
+import type { Align, Block, CanonicalDoc, Run, SignatureBlock, TableBlock, TotalsBlock } from '@/schema/canonical';
 import { blockText, normaliseTable } from '@/schema/canonical';
-import { amountColumn, amountWidth, BODY, columnAligns, columnWidths, isPartyBox, labelCase, splitCompanyName, splitPairs, textWidth, tint, TO_LABEL_RE, totalsAmountWidth } from './body';
+import { amountColumn, amountWidth, BODY, columnAligns, columnKinds, columnWidths, isPartyBox, labelCase, splitCompanyName, splitPairs, tint, TO_LABEL_RE, totalsAmountWidth } from './body';
 import { tokenize } from '@/validate/coverage';
 import { designFor, fillPlaceholders, PAGE_MM, resolveColour, type SafeArea, type TemplateDef, type TemplateElement } from '@/templates/schema';
 import type { PageMasks } from '@/templates/marker';
@@ -129,6 +129,45 @@ interface Ctx {
   /** Space after a block (pt). */
   gap: number;
   grid: ReturnType<typeof gridLayoutFor>;
+  /** The document title (first heading), so the details box does not repeat it. */
+  title: string;
+}
+
+/**
+ * Tables and totals that follow each other form one framed box: each part is pulled up by
+ * one line width so its top border lies exactly on the previous part's bottom border.
+ */
+export interface BoxJoin {
+  /** Joined to the part above. */
+  top: boolean;
+  /** Another part follows below. */
+  more: boolean;
+}
+
+const NO_JOIN: BoxJoin = { top: false, more: false };
+const boxMargin = (join: BoxJoin, ctx: Ctx): [number, number, number, number] => [0, join.top ? -BODY.line : 0, 0, join.more ? 0 : ctx.gap];
+
+/**
+ * An empty code column ("SAC Code" with nothing under it) is folded into the heading of the
+ * column before it - "Category of Service (SAC Code)" - instead of printing an empty column.
+ */
+export function foldEmptyCodeColumns(table: TableBlock): TableBlock {
+  const kinds = columnKinds(table);
+  let t = table;
+  for (let c = t.columns.length - 1; c >= 1; c--) {
+    const empty = t.rows.every((r) => !(r[c] ?? '').trim());
+    const header = t.columns[c].trim();
+    if (!empty || !header || kinds[c] !== 'short' || !t.columns[c - 1].trim() || t.columns.length <= 2) continue;
+    const drop = <T,>(arr: T[]) => [...arr.slice(0, c), ...arr.slice(c + 1)];
+    t = {
+      ...t,
+      columns: drop(t.columns).map((h, i) => (i === c - 1 ? `${h}\n(${header})` : h)),
+      col_align: drop(t.col_align),
+      rows: t.rows.map(drop),
+      col_width: t.col_width ? drop(t.col_width) : undefined,
+    };
+  }
+  return t;
 }
 
 /**
@@ -160,9 +199,10 @@ function gridLayoutFor(padX: number, padY: number) {
 /** Room for cell text once padding and lines are taken off. */
 const innerWidth = (available: number, n: number, padX: number = BODY.padX) => available - n * 2 * padX - (n + 1) * BODY.line;
 
-function tableContent(input: TableBlock, ctx: Ctx): Content {
-  const table = normaliseTable(input);
-  if (isPartyBox(table)) return partyBox(table, ctx);
+function tableContent(input: TableBlock, ctx: Ctx, join: BoxJoin = NO_JOIN): Content {
+  const normal = normaliseTable(input);
+  if (isPartyBox(normal)) return partyBox(normal, ctx, join);
+  const table = foldEmptyCodeColumns(normal);
   const n = table.columns.length;
   const size = n >= 8 ? ctx.tf * 0.88 : n >= 6 ? ctx.tf * 0.94 : ctx.tf;
   const hasHeader = table.columns.some((c) => c.trim() !== '');
@@ -186,7 +226,7 @@ function tableContent(input: TableBlock, ctx: Ctx): Content {
   return {
     fontSize: size,
     lineHeight: ctx.sp < 1 ? 1.1 : 1.15,
-    margin: [0, 0, 0, ctx.gap],
+    margin: boxMargin(join, ctx),
     table: {
       headerRows: hasHeader ? 1 : 0,
       // Never split a row across pages; never leave the header alone at a page bottom.
@@ -210,7 +250,7 @@ const pairLayout = {
 };
 
 /** Customer address | document details, side by side in one framed box. */
-function partyBox(table: TableBlock, ctx: Ctx): Content {
+function partyBox(table: TableBlock, ctx: Ctx, join: BoxJoin = NO_JOIN): Content {
   const size = ctx.tf;
   const grey = (text: string, extra: Partial<ContentText> = {}): ContentText => ({ text: styled(text, { bold: true }, ctx.fonts, ctx.body), color: BODY.muted, ...extra });
 
@@ -222,10 +262,18 @@ function partyBox(table: TableBlock, ctx: Ctx): Content {
     const out: Content[] = [];
     let nameDone = !customer;
     // Details as an aligned "Label : value" list; empty values are left out.
-    const pairRows: TableCell[][] = [];
+    const pairRows: { label: string; row: TableCell[] }[] = [];
     const flushPairs = () => {
       if (!pairRows.length) return;
-      out.push({ table: { widths: ['auto', 'auto', '*'], body: pairRows.splice(0) }, layout: pairLayout, margin: [0, 1, 0, 1] } as Content);
+      // The document's own number and date first, then the rest in their original order.
+      const rank = (label: string) =>
+        /\b(invoice|bill|quotation|quote|estimate|proforma)\b.*\b(no|number)\b/i.test(label) ? 0 : /\b(invoice|bill|quotation|quote|estimate|proforma)\b.*\bdate\b|^date$/i.test(label) ? 1 : 2;
+      const rows = pairRows
+        .splice(0)
+        .map((r, i) => ({ ...r, i }))
+        .sort((a, b) => rank(a.label) - rank(b.label) || a.i - b.i)
+        .map((r) => r.row);
+      out.push({ table: { widths: ['auto', 'auto', '*'], body: rows }, layout: pairLayout, margin: [0, 1, 0, 1] } as Content);
     };
     lines.forEach((line, i) => {
       if (customer && i === 0 && TO_LABEL_RE.test(line)) {
@@ -236,11 +284,12 @@ function partyBox(table: TableBlock, ctx: Ctx): Content {
       if (pairs && (!customer || nameDone)) {
         for (const p of pairs) {
           if (!p.value) continue;
-          pairRows.push([
-            { ...grey(labelCase(p.label)) },
-            { text: ':', color: BODY.muted },
-            { text: styled(p.value, {}, ctx.fonts, ctx.body) },
-          ]);
+          // "Type: INVOICE" when INVOICE is already the title above the box.
+          if (/^(document\s+)?type$/i.test(p.label.trim()) && ctx.title && p.value.trim().toUpperCase() === ctx.title.trim().toUpperCase()) continue;
+          pairRows.push({
+            label: p.label,
+            row: [{ ...grey(labelCase(p.label)) }, { text: ':', color: BODY.muted }, { text: styled(p.value, {}, ctx.fonts, ctx.body) }],
+          });
         }
         return;
       }
@@ -271,7 +320,7 @@ function partyBox(table: TableBlock, ctx: Ctx): Content {
   return {
     fontSize: size,
     lineHeight: ctx.sp < 1 ? 1.1 : 1.18,
-    margin: [0, 0, 0, ctx.gap],
+    margin: boxMargin(join, ctx),
     table: { dontBreakRows: true, widths: [inner * share, inner * (1 - share)], body: [cells] },
     layout: ctx.grid,
   };
@@ -307,13 +356,53 @@ export function signatureAlign(block: SignatureBlock | undefined, def: TemplateD
   return block.align ?? def.signature.align;
 }
 
-function blockContent(block: Block, ctx: Ctx): Content | null {
+/**
+ * Totals as the closing rows of the box: the label spans the left part, the figure sits in
+ * the Amount column (same width as every table's), the final total is shaded with ₹, and
+ * the amount in words is the last full-width row.
+ */
+function totalsContent(block: TotalsBlock, ctx: Ctx, join: BoxJoin): Content {
+  const size = ctx.tf;
+  const last = block.items.length - 1;
+  const body: TableCell[][] = block.items.map((item, i) => {
+    const grand = i === last;
+    const cell = (text: string): TableCell => ({
+      text: styled(text, { bold: grand }, ctx.fonts, ctx.body),
+      alignment: 'right',
+      ...(grand ? { fillColor: ctx.shade } : {}),
+    });
+    return [cell(item.label), cell(grand ? `₹ ${item.value}` : item.value)];
+  });
+  // "(Rupees ... Only)" or "Amount in words: Rupees ... Only" -> "Rupees ... Only" (the label is printed once).
+  const words = block.amount_in_words
+    ?.trim()
+    .replace(/^\(\s*/, '')
+    .replace(/\s*\)\s*$/, '')
+    .replace(/^(total\s+)?amount\s+(chargeable\s+)?in\s+words\s*[:\-–]?\s*/i, '')
+    .trim();
+  if (words) {
+    body.push([
+      { text: [{ text: 'Amount in words: ', color: BODY.muted, bold: true }, ...styled(words, { bold: true }, ctx.fonts, ctx.body)], colSpan: 2 },
+      {},
+    ]);
+  }
+  if (!body.length) return { text: '' };
+  return {
+    fontSize: size,
+    lineHeight: ctx.sp < 1 ? 1.1 : 1.15,
+    margin: boxMargin(join, ctx),
+    table: { dontBreakRows: true, widths: ['*', Math.max(ctx.amountW, totalsAmountWidth(block, size))], body },
+    layout: ctx.grid,
+  };
+}
+
+function blockContent(block: Block, ctx: Ctx, join: BoxJoin = NO_JOIN): Content | null {
   const { f } = ctx;
   switch (block.type) {
     case 'heading': {
       const scale = block.level === 1 ? 1.5 : block.level === 2 ? 1.25 : 1.1;
       return {
-        text: styled(block.text, { bold: true }, ctx.fonts, ctx.body),
+        text: styled(block.text, { bold: block.bold !== false }, ctx.fonts, ctx.body),
         fontSize: f * scale,
         alignment: pdfAlign(block.align),
         margin: [0, (block.level === 1 ? 2 : 4) * ctx.sp, 0, (block.level === 1 ? 8 : 4) * ctx.sp],
@@ -341,46 +430,9 @@ function blockContent(block: Block, ctx: Ctx): Content | null {
         margin: [0, 0, 0, 5 * ctx.sp],
       };
     case 'table':
-      return tableContent(block, ctx);
-    case 'totals': {
-      // Lined up under the tables' Amount column; only the final total is highlighted.
-      const size = ctx.tf;
-      const last = block.items.length - 1;
-      const none: [boolean, boolean, boolean, boolean] = [false, false, false, false];
-      const body: TableCell[][] = block.items.map((item, i) => {
-        const grand = i === last;
-        const cell = (text: string, alignment: 'left' | 'right'): TableCell => ({
-          text: styled(text, { bold: grand }, ctx.fonts, ctx.body),
-          alignment,
-          border: grand ? ([false, true, false, true] as [boolean, boolean, boolean, boolean]) : none,
-          ...(grand ? { fillColor: ctx.shade, margin: [0, 1.5, 0, 1.5] } : {}),
-        });
-        return [{ text: '', border: none }, cell(item.label, 'right'), cell(grand ? `₹ ${item.value}` : item.value, 'right')] as TableCell[];
-      });
-      // Labels stay on one line (up to half the width).
-      const labelW = Math.min(ctx.available * 0.5, Math.max(...block.items.map((item) => textWidth(item.label, size, true) + 4), 40));
-      const stack: Content[] = [];
-      if (body.length) {
-        stack.push({
-          fontSize: size,
-          table: { dontBreakRows: true, widths: ['*', labelW, Math.max(ctx.amountW, totalsAmountWidth(block, size))], body },
-          layout: { ...ctx.grid, vLineWidth: () => 0, paddingTop: () => Math.min(2, ctx.padY), paddingBottom: () => Math.min(2, ctx.padY) },
-        });
-      }
-      const words = block.amount_in_words?.trim().replace(/^\(\s*/, '').replace(/\s*\)\s*$/, '');
-      if (words) {
-        stack.push({
-          fontSize: size,
-          margin: [0, 6 * ctx.sp, 0, 0],
-          table: {
-            widths: ['*'],
-            body: [[{ text: [{ text: 'Amount in words: ', color: BODY.muted, bold: true }, ...styled(words, { bold: true }, ctx.fonts, ctx.body)] }]],
-          },
-          layout: ctx.grid,
-        });
-      }
-      return { stack, margin: [0, 0, 0, ctx.gap] };
-    }
+      return tableContent(block, ctx, join);
+    case 'totals':
+      return totalsContent(block, ctx, join);
     case 'list': {
       const items = block.items.map((item) => ({ text: styled(item, {}, ctx.fonts, ctx.body) }));
       return block.ordered ? { ol: items, margin: [0, 0, 0, 6 * ctx.sp] } : { ul: items, margin: [0, 0, 0, 6 * ctx.sp] };
@@ -573,6 +625,7 @@ export function buildDocDefinition(doc: CanonicalDoc, tpl: TemplateInput, option
     padY,
     gap: BODY.blockGap * density.space,
     grid: gridLayoutFor(padX, padY),
+    title: '',
   };
 
   const content: Content[] = [];
@@ -580,7 +633,21 @@ export function buildDocDefinition(doc: CanonicalDoc, tpl: TemplateInput, option
   if (firstPageExtra > 0) content.push({ text: '', margin: [0, firstPageExtra, 0, 0] });
 
   const own = ownLetterheadBlocks(doc.blocks, def);
-  const blocks = doc.blocks.filter((_, i) => !own.has(i));
+  const boxed = (b: Block | undefined) => b?.type === 'table' || b?.type === 'totals';
+  const kept = doc.blocks.filter((_, i) => !own.has(i));
+  // A space between two parts of the box would split it: drop it.
+  const blocks = kept.filter((b, i) => {
+    if (b.type !== 'spacer') return true;
+    let p = i - 1;
+    while (p >= 0 && kept[p].type === 'spacer') p--;
+    let n = i + 1;
+    while (n < kept.length && kept[n].type === 'spacer') n++;
+    return !(boxed(kept[p]) && boxed(kept[n]));
+  });
+  // Tables and totals that follow each other print as one joined box.
+  const joinAt = (i: number): BoxJoin => (boxed(blocks[i]) ? { top: boxed(blocks[i - 1]), more: boxed(blocks[i + 1]) } : NO_JOIN);
+  const title = blocks.find((b) => b.type === 'heading');
+  ctx.title = title?.type === 'heading' ? title.text : '';
 
   // Tight layouts: the terms (text just before the signature) and the signature side by
   // side, as many printed quotations do, instead of the signature alone on a new page.
@@ -623,18 +690,15 @@ export function buildDocDefinition(doc: CanonicalDoc, tpl: TemplateInput, option
         // Only when the signature follows closely; pinning a long tail together would
         // push everything to the next page and leave this one half empty.
         if (group.reduce((n, b) => n + estimateLines(b), 0) <= 20) {
-          const stack = group.map((b) => blockContent(b, ctx)).filter((c): c is Content => c !== null);
+          const stack = group.map((b, k) => blockContent(b, ctx, joinAt(i + k))).filter((c): c is Content => c !== null);
           content.push({ stack, unbreakable: true });
           i = end;
           continue;
         }
       }
     }
-    const c = blockContent(block, ctx);
+    const c = blockContent(block, ctx, joinAt(i));
     if (!c) continue;
-    // Boxes that follow each other directly (one ruled form in the original: address |
-    // details, then the item table...) print as one joined frame, not separate boxes.
-    if (block.type === 'table' && blocks[i + 1]?.type === 'table') (c as { margin?: number[] }).margin = [0, 0, 0, 0];
     content.push(block.type === 'totals' ? { stack: [c], unbreakable: true } : c);
   }
 

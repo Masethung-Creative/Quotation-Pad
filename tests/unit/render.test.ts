@@ -222,3 +222,29 @@ describe('signature placement', () => {
     expect(added.filter((d) => d.get(PDFName.of('SMask')))).toHaveLength(1);
   });
 });
+
+describe('quotation body rules', () => {
+  it('prints a title bold unless the bold switch is off', async () => {
+    const plain = buildDocDefinition({ blocks: [{ type: 'heading', text: 'QUOTATION', level: 1, align: 'center', bold: false }], confidence: {} }, kaveri);
+    const bold = buildDocDefinition({ blocks: [{ type: 'heading', text: 'QUOTATION', level: 1, align: 'center' }], confidence: {} }, kaveri);
+    expect(JSON.stringify(plain.definition.content)).not.toContain('"bold":true');
+    expect(JSON.stringify(bold.definition.content)).toContain('"bold":true');
+  });
+
+  it('prints the "Amount in words" label once, without brackets', () => {
+    const { definition } = buildDocDefinition(
+      { blocks: [{ type: 'totals', items: [{ label: 'Grand Total', value: '3,540.00', bold: true }], amount_in_words: 'Amount in words: Rupees Three Thousand Five Hundred Forty Only' }], confidence: {} },
+      kaveri,
+    );
+    const json = JSON.stringify(definition.content);
+    expect(json.match(/Amount in words/g)).toHaveLength(1);
+    expect(json).toContain('₹ 3,540.00');
+  });
+
+  it('keeps a page break from splitting the box badly: header rows repeat, rows never split', () => {
+    const { definition } = buildDocDefinition(longDoc(60), kaveri);
+    const json = JSON.stringify(definition.content);
+    expect(json).toContain('"headerRows":1');
+    expect(json).toContain('"dontBreakRows":true');
+  });
+});
