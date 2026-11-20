@@ -256,9 +256,10 @@ function mergeMeta(blocks: XBlock[]): XBlock[] {
   for (const block of blocks) {
     const prev = out[out.length - 1];
     if (block.type === 'meta' && prev?.type === 'meta') {
+      const incoming = block.items.map((item, i) => (i === 0 ? { ...item, break: true as const } : item));
       out[out.length - 1] = {
         ...prev,
-        items: [...prev.items, ...block.items],
+        items: [...prev.items, ...incoming],
         _conf: Math.min(prev._conf ?? 1, block._conf ?? 1),
         _low: [...(prev._low ?? []), ...(block._low ?? [])],
       };

@@ -386,7 +386,7 @@ interface PageContext {
 
 const META_LABEL_RE =
   /^(our\s+|your\s+)?(ref(erence)?|quotation|quote|qtn|enquiry|inquiry|enq|date|dated|valid(ity)?(\s+(up\s*to|until|till))?|p\.?o\.?|order|offer)(\s*(no|number|ref|date|#))?\.?$/i;
-const META_RE = /^([A-Za-z][A-Za-z0-9 .\/&'#-]{1,30}?)\s*[:\uFF1A]\s*(\S.*)$/;
+const META_RE = /^([A-Za-z][A-Za-z0-9 .\/&'#-]{1,30}?)\s*[:\uFF1A]\s*(.*)$/;
 
 export function metaOf(text: string): LabelValue | null {
   const m = text.match(META_RE);
@@ -667,7 +667,9 @@ function textLinesToBlocks(lines: Line[], ctx: PageContext, out: XBlock[]): void
       const metas = segs.map((s) => metaOf(s.text));
       if (metas.every(Boolean)) {
         flushGroup();
-        meta.push(...(metas as LabelValue[]));
+        const items = metas as LabelValue[];
+        if (meta.length && items.length) items[0] = { ...items[0], break: true };
+        meta.push(...items);
         metaWords.push(...segs.flatMap((s) => s.words));
         continue;
       }
@@ -675,7 +677,9 @@ function textLinesToBlocks(lines: Line[], ctx: PageContext, out: XBlock[]): void
       let cut = segs.length;
       while (cut > 1 && metas[cut - 1]) cut--;
       if (cut < segs.length) {
-        meta.push(...(metas.slice(cut) as LabelValue[]));
+        const items = metas.slice(cut) as LabelValue[];
+        if (meta.length && items.length) items[0] = { ...items[0], break: true };
+        meta.push(...items);
         metaWords.push(...segs.slice(cut).flatMap((s) => s.words));
         segs = segs.slice(0, cut);
       }

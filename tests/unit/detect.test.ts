@@ -50,7 +50,7 @@ describe('detectFile', () => {
 
   it('asks for .docx or PDF when given a legacy .doc', async () => {
     const doc = file(bytes([0xd0, 0xcf, 0x11, 0xe0, 0xa1, 0xb1, 0x1a, 0xe1]), 'old.doc', 'application/msword');
-    await expect(detectFile(doc)).rejects.toThrow('Please save this as .docx or PDF and upload again.');
+    await expect(detectFile(doc)).rejects.toThrow('Please save this as .docx, .odt or PDF and upload again.');
     await expect(detectFile(doc)).rejects.toBeInstanceOf(IngestError);
   });
 

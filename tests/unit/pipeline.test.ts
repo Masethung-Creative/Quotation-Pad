@@ -92,7 +92,7 @@ describe('plain-English errors with the right "Try again"', () => {
   const kind = (err: unknown) => classifyError(err);
   it('recognises every error the brief lists', () => {
     expect(kind(new IngestError('too-large', 'This file is 25.0 MB. The limit is 20 MB.'))).toBe('too-large');
-    expect(kind(new IngestError('legacy-doc', 'Please save this as .docx or PDF and upload again.'))).toBe('legacy-doc');
+    expect(kind(new IngestError('legacy-doc', 'Please save this as .docx, .odt or PDF and upload again.'))).toBe('legacy-doc');
     expect(kind(Object.assign(new Error('No password given'), { name: 'PasswordException' }))).toBe('password');
     expect(kind(Object.assign(new Error('Invalid PDF structure.'), { name: 'InvalidPDFException' }))).toBe('unreadable');
     expect(kind(new Error("Can't find end of central directory : is this a zip file ?"))).toBe('unreadable');
@@ -110,7 +110,7 @@ describe('plain-English errors with the right "Try again"', () => {
     const big = friendlyError(new IngestError('too-large', 'This file is 25.0 MB. The limit is 20 MB.'));
     expect(big.message).toContain('25.0 MB');
     expect(big.retry).toBe('pick');
-    expect(friendlyError(new IngestError('legacy-doc', 'x')).message).toBe('Please save this as .docx or PDF and upload again.');
+    expect(friendlyError(new IngestError('legacy-doc', 'x')).message).toBe('Please save this as .docx, .odt or PDF and upload again.');
     expect(friendlyError(Object.assign(new Error('x'), { name: 'PasswordException' })).message).toMatch(/without a password/);
   });
 });

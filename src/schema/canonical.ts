@@ -17,6 +17,8 @@ export interface Run {
 export interface LabelValue {
   label: string;
   value: string;
+  /** True on the first item of a new line (set when merging meta blocks to preserve layout). */
+  break?: boolean;
 }
 
 export interface TotalsItem extends LabelValue {
@@ -101,7 +103,7 @@ export interface CanonicalDoc {
 }
 
 const align = z.enum(['left', 'center', 'right', 'justify']);
-const labelValue = z.object({ label: z.string(), value: z.string() });
+const labelValue = z.object({ label: z.string(), value: z.string(), break: z.boolean().optional() });
 
 const blockSchema = z.discriminatedUnion('type', [
   z.object({

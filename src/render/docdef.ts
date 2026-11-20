@@ -283,12 +283,11 @@ function partyBox(table: TableBlock, ctx: Ctx, join: BoxJoin = NO_JOIN): Content
       const pairs = splitPairs(line);
       if (pairs && (!customer || nameDone)) {
         for (const p of pairs) {
-          if (!p.value) continue;
           // "Type: INVOICE" when the title above the box already says it (INVOICE, TAX INVOICE).
           if (/^(document\s+)?type$/i.test(p.label.trim()) && ctx.title && ctx.title.toUpperCase().includes(p.value.trim().toUpperCase())) continue;
           pairRows.push({
             label: p.label,
-            row: [{ ...grey(labelCase(p.label)) }, { text: ':', color: BODY.muted }, { text: styled(p.value, {}, ctx.fonts, ctx.body) }],
+            row: [{ ...grey(labelCase(p.label)) }, { text: ':', color: BODY.muted }, { text: p.value ? styled(p.value, {}, ctx.fonts, ctx.body) : [] }],
           });
         }
         return;
@@ -413,12 +412,32 @@ function blockContent(block: Block, ctx: Ctx, join: BoxJoin = NO_JOIN): Content 
         text: [...styled(`${item.label}: `, { bold: true }, ctx.fonts, ctx.body), ...styled(item.value, {}, ctx.fonts, ctx.body)],
         alignment,
       });
+      // Group items by their original line: items on the same line stay together.
+      const hasBreaks = block.items.some((item) => item.break);
+      const groups: { label: string; value: string }[][] = [];
+      if (hasBreaks) {
+        for (const item of block.items) {
+          if (item.break || !groups.length) groups.push([]);
+          groups[groups.length - 1].push(item);
+        }
+      } else {
+        // No line info (old data or single-line block): pair items two at a time.
+        for (let i = 0; i < block.items.length; i += 2) {
+          const pair = [block.items[i]];
+          if (block.items[i + 1]) pair.push(block.items[i + 1]);
+          groups.push(pair);
+        }
+      }
       const rows: Content[] = [];
-      for (let i = 0; i < block.items.length; i += 2) {
-        const left = block.items[i];
-        const right = block.items[i + 1];
-        // Two details share a line: the first on the left, the second on the right (Ref No ... Date).
-        rows.push(right ? { columns: [{ ...cell(left, 'left'), width: '*' }, { ...cell(right, 'right'), width: 'auto' }], columnGap: 12 } : cell(left, 'left'));
+      for (const group of groups) {
+        if (group.length === 1) {
+          rows.push(cell(group[0], 'left'));
+        } else if (group.length === 2) {
+          rows.push({ columns: [{ ...cell(group[0], 'left'), width: '*' }, { ...cell(group[1], 'right'), width: 'auto' }], columnGap: 12 });
+        } else {
+          const cols = group.map((item, i) => ({ ...cell(item, i === 0 ? 'left' : 'right'), width: i === 0 ? ('*' as const) : ('auto' as const) }));
+          rows.push({ columns: cols, columnGap: 12 });
+        }
       }
       return { stack: rows, margin: [0, 0, 0, 6 * ctx.sp] };
     }

@@ -1,4 +1,5 @@
 import type { DocxHtml } from '@/extract/docx';
+import type { OdtHtml } from '@/extract/odt';
 import type { ExtractRequest, ExtractResponse } from './extract.worker';
 
 /**
@@ -61,6 +62,20 @@ export async function docxToHtmlOffThread(buffer: ArrayBuffer): Promise<DocxHtml
     if (err instanceof Error && err.message !== 'no-worker' && !broken) throw err;
     const { docxToHtml } = await import('@/extract/docx');
     return docxToHtml(copy);
+  }
+}
+
+export async function odtToHtmlOffThread(buffer: ArrayBuffer): Promise<OdtHtml> {
+  const copy = buffer.slice(0);
+  try {
+    const res = await call({ type: 'odt', buffer }, [buffer]);
+    if (res.ok && res.type === 'odt') return { html: res.html, messages: res.messages };
+    if (!res.ok) throw new Error(res.error);
+    throw new Error('Unexpected worker reply');
+  } catch (err) {
+    if (err instanceof Error && err.message !== 'no-worker' && !broken) throw err;
+    const { odtToHtml } = await import('@/extract/odt');
+    return odtToHtml(copy);
   }
 }
 

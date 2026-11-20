@@ -161,7 +161,7 @@ export default function Home() {
             <FileUp className="size-8" />
           </span>
           <span className="text-xl font-semibold">Upload quotation</span>
-          <span className="text-sm text-primary-foreground/80">PDF, Word (.docx) or photo · up to 20 MB</span>
+          <span className="text-sm text-primary-foreground/80">PDF, Word, ODT or photo · up to 20 MB</span>
         </button>
 
         {/* Phones and tablets only (touch screens): open the camera directly. */}

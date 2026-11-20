@@ -36,7 +36,7 @@ export type XBlock = Block & {
   _cells?: string[];
 };
 
-export type ExtractMethod = 'docx' | 'pdf-text' | 'ocr' | 'pdf-mixed' | 'json';
+export type ExtractMethod = 'docx' | 'odt' | 'pdf-text' | 'ocr' | 'pdf-mixed' | 'json';
 
 export interface ExtractResult {
   doc: CanonicalDoc;

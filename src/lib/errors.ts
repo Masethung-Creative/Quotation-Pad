@@ -31,12 +31,12 @@ const MESSAGES: Record<ErrorKind, Omit<FriendlyError, 'kind'>> = {
   },
   'legacy-doc': {
     title: 'Old Word format',
-    message: 'Please save this as .docx or PDF and upload again.',
+    message: 'Please save this as .docx, .odt or PDF and upload again.',
     retry: 'pick',
   },
   unsupported: {
     title: 'This type of file cannot be read',
-    message: 'Upload a PDF, a Word (.docx) file or a photo (JPG, PNG or HEIC).',
+    message: 'Upload a PDF, Word (.docx), OpenDocument (.odt) file or a photo (JPG, PNG or HEIC).',
     retry: 'pick',
   },
   empty: {

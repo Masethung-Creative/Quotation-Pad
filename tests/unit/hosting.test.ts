@@ -65,7 +65,7 @@ describe('hosting configuration', () => {
   it('the static first screen matches the live upload screen text', () => {
     const html = readFileSync(join(ROOT, 'index.html'), 'utf8');
     const home = readFileSync(join(ROOT, 'src', 'pages', 'Home.tsx'), 'utf8');
-    for (const text of ['Upload quotation', 'PDF, Word (.docx) or photo · up to 20 MB', 'Take a photo of a quotation']) {
+    for (const text of ['Upload quotation', 'PDF, Word, ODT or photo · up to 20 MB', 'Take a photo of a quotation']) {
       expect(html).toContain(text);
       expect(home).toContain(text);
     }

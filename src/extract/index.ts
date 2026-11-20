@@ -175,6 +175,13 @@ export async function extractFile(blob: Blob, kind: FileKind, options: ExtractOp
       progress({ stage: 'structure', message: 'Rebuilding tables and paragraphs' });
       return finishDocx(html, pages ?? 0);
     }
+    case 'odt': {
+      progress({ stage: 'reading', message: 'Reading the OpenDocument file' });
+      const [{ odtToHtmlOffThread }, { finishOdt }] = await Promise.all([import('@/workers/extractClient'), import('./odt')]);
+      const html = await odtToHtmlOffThread(await blob.arrayBuffer());
+      progress({ stage: 'structure', message: 'Rebuilding tables and paragraphs' });
+      return finishOdt(html);
+    }
     case 'pdf':
       return extractPdf(await blob.arrayBuffer(), options, progress);
     case 'heic': {

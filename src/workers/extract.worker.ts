@@ -2,14 +2,16 @@
 import { docxToHtml } from '@/extract/docx';
 import { grayToPgm, preprocess } from '@/extract/image';
 
-/** Off-main-thread work for extraction: Word conversion and image clean-up for OCR. */
+/** Off-main-thread work for extraction: Word/ODT conversion and image clean-up for OCR. */
 
 export type ExtractRequest =
   | { id: number; type: 'docx'; buffer: ArrayBuffer }
+  | { id: number; type: 'odt'; buffer: ArrayBuffer }
   | { id: number; type: 'preprocess'; rgba: ArrayBuffer; width: number; height: number; photo: boolean };
 
 export type ExtractResponse =
   | { id: number; ok: true; type: 'docx'; html: string; messages: string[] }
+  | { id: number; ok: true; type: 'odt'; html: string; messages: string[] }
   | { id: number; ok: true; type: 'preprocess'; pgm: ArrayBuffer; width: number; height: number; angle: number }
   | { id: number; ok: false; error: string };
 
@@ -21,6 +23,10 @@ scope.onmessage = async (event: MessageEvent<ExtractRequest>) => {
     if (req.type === 'docx') {
       const res = await docxToHtml(req.buffer);
       scope.postMessage({ id: req.id, ok: true, type: 'docx', html: res.html, messages: res.messages } satisfies ExtractResponse);
+    } else if (req.type === 'odt') {
+      const { odtToHtml } = await import('@/extract/odt');
+      const res = await odtToHtml(req.buffer);
+      scope.postMessage({ id: req.id, ok: true, type: 'odt', html: res.html, messages: res.messages } satisfies ExtractResponse);
     } else {
       const pre = preprocess(new Uint8ClampedArray(req.rgba), req.width, req.height, req.photo);
       const pgm = grayToPgm(pre.gray, pre.width, pre.height);

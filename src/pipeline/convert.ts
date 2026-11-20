@@ -47,7 +47,7 @@ export async function runExtraction(file: Blob, kind: FileKind, options: Extract
 export const EXTRACTOR_VERSION = 4;
 
 /** Kinds of file the latest reader improved; scans are not re-read (OCR is slow). */
-const IMPROVED: ExtractResult['method'][] = ['pdf-text', 'pdf-mixed', 'docx'];
+const IMPROVED: ExtractResult['method'][] = ['pdf-text', 'pdf-mixed', 'docx', 'odt'];
 
 /**
  * A quotation read by an older version and never edited is read again from its stored

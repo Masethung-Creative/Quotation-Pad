@@ -1,6 +1,6 @@
 /** File type detection by magic bytes first, MIME / extension second. */
 
-export type FileKind = 'pdf' | 'docx' | 'jpg' | 'png' | 'webp' | 'heic' | 'json';
+export type FileKind = 'pdf' | 'docx' | 'odt' | 'jpg' | 'png' | 'webp' | 'heic' | 'json';
 
 export const MAX_FILE_BYTES = 20 * 1024 * 1024;
 
@@ -39,9 +39,12 @@ export function sniff(head: Uint8Array, tail: Uint8Array, name: string, mime: st
     if (HEIC_BRANDS.some((b) => brands.includes(b))) return 'heic';
   }
   if (head[0] === 0x50 && head[1] === 0x4b && (head[2] === 0x03 || head[2] === 0x05)) {
-    // A zip container: only Word documents are accepted.
+    // A zip container: Word and OpenDocument text files are accepted.
     if (includesAscii(head, 'word/') || includesAscii(tail, 'word/document.xml')) return 'docx';
     if (ext === 'docx' && !includesAscii(tail, 'xl/') && !includesAscii(tail, 'ppt/')) return 'docx';
+    if (includesAscii(head, 'mimetypeapplication/vnd.oasis.opendocument.text')) return 'odt';
+    if (includesAscii(tail, 'content.xml') && (ext === 'odt' || includesAscii(head, 'opendocument'))) return 'odt';
+    if (ext === 'odt') return 'odt';
     return 'unknown';
   }
   // OLE2 compound file = legacy .doc (or .xls/.ppt); RTF is treated the same way.
@@ -63,9 +66,9 @@ export async function detectFile(file: File): Promise<FileKind> {
   const head = new Uint8Array(await file.slice(0, 65536).arrayBuffer());
   const tail = new Uint8Array(await file.slice(Math.max(0, file.size - 65536)).arrayBuffer());
   const kind = sniff(head, tail, file.name, file.type);
-  if (kind === 'doc') throw new IngestError('legacy-doc', 'Please save this as .docx or PDF and upload again.');
+  if (kind === 'doc') throw new IngestError('legacy-doc', 'Please save this as .docx, .odt or PDF and upload again.');
   if (kind === 'unknown') {
-    throw new IngestError('unsupported', 'This file type is not supported. Upload a PDF, a Word (.docx) file or a photo (JPG, PNG, HEIC).');
+    throw new IngestError('unsupported', 'This file type is not supported. Upload a PDF, a Word (.docx), an OpenDocument (.odt) file or a photo (JPG, PNG, HEIC).');
   }
   return kind;
 }
@@ -73,6 +76,7 @@ export async function detectFile(file: File): Promise<FileKind> {
 export const KIND_LABEL: Record<FileKind, string> = {
   pdf: 'PDF',
   docx: 'Word',
+  odt: 'OpenDocument',
   jpg: 'Photo',
   png: 'Image',
   webp: 'Image',
@@ -81,4 +85,4 @@ export const KIND_LABEL: Record<FileKind, string> = {
 };
 
 export const ACCEPT_ATTR =
-  '.pdf,.docx,.doc,.jpg,.jpeg,.png,.heic,.heif,.webp,.json,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document,image/jpeg,image/png,image/heic,image/heif,image/webp';
+  '.pdf,.docx,.doc,.odt,.jpg,.jpeg,.png,.heic,.heif,.webp,.json,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document,application/vnd.oasis.opendocument.text,image/jpeg,image/png,image/heic,image/heif,image/webp';

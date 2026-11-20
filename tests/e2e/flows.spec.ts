@@ -203,7 +203,7 @@ test.describe('Signatures', () => {
 
 test.describe('Errors: plain English and a Try again button', () => {
   const cases: { name: string; file: { name: string; mimeType: string; buffer: Buffer }; kind: string; text: RegExp }[] = [
-    { name: 'old .doc', file: { name: 'old.doc', mimeType: 'application/msword', buffer: legacyDoc() }, kind: 'legacy-doc', text: /Please save this as \.docx or PDF and upload again\./ },
+    { name: 'old .doc', file: { name: 'old.doc', mimeType: 'application/msword', buffer: legacyDoc() }, kind: 'legacy-doc', text: /Please save this as \.docx, \.odt or PDF and upload again\./ },
     { name: 'password-protected PDF', file: { name: 'locked.pdf', mimeType: 'application/pdf', buffer: lockedPdf() }, kind: 'password', text: /locked with a password/ },
     { name: 'damaged PDF', file: { name: 'broken.pdf', mimeType: 'application/pdf', buffer: brokenPdf() }, kind: 'unreadable', text: /could not be read/ },
     { name: 'file too large', file: { name: 'huge.pdf', mimeType: 'application/pdf', buffer: hugePdf() }, kind: 'too-large', text: /21\.0 MB\. The limit is 20 MB\./ },
